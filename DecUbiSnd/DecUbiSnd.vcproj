@@ -116,7 +116,13 @@
 				RelativePath=".\ADPCM.cpp">
 			</File>
 			<File
+				RelativePath=".\AudioStream.cpp">
+			</File>
+			<File
 				RelativePath=".\Main.cpp">
+			</File>
+			<File
+				RelativePath=".\Scan.cpp">
 			</File>
 			<File
 				RelativePath=".\stdafx.cpp">
@@ -134,7 +140,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\Type3.cpp">
+				RelativePath=".\Version5Stream.cpp">
 			</File>
 			<File
 				RelativePath=".\WaveWriter.cpp">
@@ -148,10 +154,16 @@
 				RelativePath=".\ADPCM.h">
 			</File>
 			<File
+				RelativePath=".\AudioStream.h">
+			</File>
+			<File
+				RelativePath=".\Scan.h">
+			</File>
+			<File
 				RelativePath=".\stdafx.h">
 			</File>
 			<File
-				RelativePath=".\Type3.h">
+				RelativePath=".\Version5Stream.h">
 			</File>
 			<File
 				RelativePath=".\WaveWriter.h">
