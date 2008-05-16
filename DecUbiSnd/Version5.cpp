@@ -1,17 +1,57 @@
-// Type3.cpp : Decompresses UbiSoft format type 3 audio
+// Version5.cpp : Convert UbiSoft format version 3 and 5 audio
 //
 
 #include "stdafx.h"
 #include "Adpcm.h"
 
-// Convert UbiSoft format type 3 audio
-bool ConvertType3(std::istream& Input, std::ostream& Output, size_t Size, bool Stereo, size_t HeaderSize)
+/*
+// Decompress the file
+if(Args.InputSize<2)
+{
+	std::cout << "Input size not specified." << std::endl;
+	return 1;
+}
+if(!ConvertVersion5(Input, Output, Args.InputSize-1, Args.InputStereo ? 2 : 1))
+{
+	std::cout << "Problems decompressing the input file." << std::endl;
+	return 5;
+}
+
+// Set some information
+SampleRate=32000;
+BitsPerSample=16;
+Channels=Args.InputStereo ? 2 : 1;
+NumberSamples=(unsigned long)(Args.InputSize-Args.InputHeaderDebug)*2;
+*/
+
+// Convert UbiSoft version 3 or 5 audio
+bool ConvertVersion5(std::istream& Input, std::ostream& Output, size_t Size, unsigned char Channels)
 {
 	// Error checking
 	bool Return=true;
 	if(Size==0)
 	{
 		return false;
+	}
+	if(Channels<0 || Channels>2)
+	{
+		return false;
+	}
+	if(Channels==0)
+	{
+		std::cout << "Warning: Automatic channels detection has not yet been implemented. Assuming stereo." << std::endl;
+		Channels=2;
+	}
+
+	// Determine the header size
+	size_t HeaderSize;
+	if(Channels==2)
+	{
+		HeaderSize=68;
+	}
+	else
+	{
+		HeaderSize=48;
 	}
 
 	// Create the buffers
@@ -30,7 +70,7 @@ bool ConvertType3(std::istream& Input, std::ostream& Output, size_t Size, bool S
 	StereoParam.OutputBuffer=OutputBuffer;
 
 	// Read the header
-	if(!Stereo)
+	if(Channels==1)
 	{
 		Input.seekg(15, std::ios_base::cur);
 		Input.read((char*)&MonoParam.FirstSample, 2);
@@ -67,7 +107,7 @@ bool ConvertType3(std::istream& Input, std::ostream& Output, size_t Size, bool S
 		Input.read(InputBuffer, InputLength);
 
 		// Decompress the data
-		if(!Stereo)
+		if(Channels==1)
 		{
 			MonoParam.InputLength=InputLength;
 			if(!DecompressMonoAdpcm(&MonoParam))
