@@ -76,8 +76,12 @@ bool CVersion5Stream::InitHeader(unsigned char Channels, unsigned char Force)
 	m_Input.read((char*)&m_RightIndex, 1);
 	m_Input.seekg(5, std::ios_base::cur);
 
-	m_LeftSample=0; // ?????????
-	m_RightSample=0; // ?????????
+	// The samples are big-endian for some reason
+	if(m_Type==3)
+	{
+		m_LeftSample=(((unsigned short)m_LeftSample&0xFF00)>>8) | (((unsigned short)m_LeftSample&0x00FF)<<8);
+		m_RightSample=(((unsigned short)m_RightSample&0xFF00)>>8) | (((unsigned short)m_RightSample&0x00FF)<<8);
+	}
 
 	// Figure out whether it is mono or stereo
 	if(Channels==0)
@@ -181,7 +185,7 @@ bool CVersion5Stream::Decode(short* Buffer, unsigned long& NumberSamples)
 	return true;
 }
 
-unsigned long CVersion5Stream::GetSampleRate()
+unsigned long CVersion5Stream::GetSampleRate() const
 {
 	// Check each possible type
 	if(m_Type==3)
@@ -195,7 +199,7 @@ unsigned long CVersion5Stream::GetSampleRate()
 	return 22050;
 }
 
-unsigned char CVersion5Stream::GetChannels()
+unsigned char CVersion5Stream::GetChannels() const
 {
 	return m_Stereo ? 2 : 1;
 }

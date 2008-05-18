@@ -51,33 +51,44 @@ static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
 			if(Buffer[i]==3 || Buffer[i]==5)
 			{
 				// Store some variables
-				const size_t ChunkStart=CurrentOffset+i;
+				const std::streamoff ChunkStart=(std::streamoff)CurrentOffset+i;
 
 				// Some assumptions
-				unsigned char Char14;
-				unsigned char Char15;
-				unsigned char Char18;
-				unsigned char Char19;
-				unsigned char Char22;
-				unsigned char Char23;
+				unsigned char Char[28];
+				bool ChunkValid=false;
 
 				// Read in the characters
-				Input.seekg((std::streamoff)ChunkStart+14);
-				Char14=Input.get();
-				Char15=Input.get();
-				Input.seekg(2, std::ios_base::cur);
-				Char18=Input.get();
-				Char19=Input.get();
-				Input.seekg(2, std::ios_base::cur);
-				Char22=Input.get();
-				Char23=Input.get();
+				Input.seekg(ChunkStart);
+				Input.read((char*)Char, 28);
 
 				// Check the characters
-				if(/*Char14==0 && Char15==10 &&*/ Char18<89 && (Char19==0 || Char19==119) && \
-					Char22<89 && Char23<5) // Not so sure about last condition
+				if(Char[9]==0 && Char[10]==0 && Char[11]==0 && Char[18]<89 && \
+					(Char[19]==0 || Char[19]==119) && Char[22]<89 && Char[23]<5)
+				{
+					ChunkValid=true;
+				}
+
+				// Check some other conditions
+				if(ChunkValid && (Char[0]==3))
+				{
+					if(Char[14]!=0 || Char[15]!=10)
+					{
+						ChunkValid=false;
+					}
+				}
+				else if(ChunkValid && (Char[0]==5))
+				{
+					if(Char[14]!=10 || Char[15]!=0)
+					{
+						ChunkValid=false;
+					}
+				}
+
+				// If the 
+				if(ChunkValid)
 				{
 					// The file is valid so far, so return success
-					Input.seekg((std::streamoff)ChunkStart);
+					Input.seekg(ChunkStart);
 					BytesRead=ChunkStart-StartOffset;
 					delete [] Buffer;
 					return true;
@@ -115,12 +126,31 @@ bool ScanAndList(std::istream& Input, size_t EndOffset)
 			BytesRead=EndOffset-ChunkOffset;
 		}
 
-		//std::cout << (int)ChunkOffset << ", " << (int)BytesRead << std::endl;
-		std::cout << "DecUbiSnd -D \"\" -i " << (int)ChunkOffset << " -s " << \
-			(int)BytesRead << " --stereo -w -o __Scan" << NumberFound << ".wav" << \
-			std::endl;
+		if(BytesRead<48)
+		{
+			// Skip to the next file; this one is too small
+			// The next file cannot start at the next byte
+			Input.seekg(29, std::ios_base::cur);
+			Found=DoScan(Input, EndOffset, BytesRead);
+			continue;
+		}
+
+		std::cout << (int)ChunkOffset << "\t" << (int)BytesRead;
 		NumberFound++;
+
+		/*unsigned char Char[36];
+		std::streamoff Prev=Input.tellg();
+		Input.seekg(ChunkOffset);
+		Input.read((char*)Char, 36);
+		std::cout << "\t";
+		for(unsigned long j=0;j<36;j++)
+		{
+			std::cout << (int)Char[j] << "\t";
+		}
+		Input.seekg(Prev);*/
+
+		std::cout << std::endl;
 	}
-	//std::cout << std::endl << "Found: " << NumberFound << std::endl;
-	return false;
+	std::cerr << std::endl << "Found: " << NumberFound << std::endl;
+	return true;
 }
