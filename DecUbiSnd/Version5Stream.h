@@ -21,6 +21,6 @@ public:
 
 	virtual bool InitHeader(unsigned char Channels, unsigned char Force=0);
 	virtual bool Decode(short* Buffer, unsigned long& NumberSamples);
-	virtual unsigned long GetSampleRate();
-	virtual unsigned char GetChannels();
+	virtual unsigned long GetSampleRate() const;
+	virtual unsigned char GetChannels() const;
 };

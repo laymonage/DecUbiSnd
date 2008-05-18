@@ -1,0 +1,1 @@
+@DecUbiSnd "C:\Program Files\UBISOFT\Splinter Cell Pandora Tomorrow\offline\data\sounds\Music_Lab.SS0" -g LabFight.seg -w -o LabFight.wav --stereo

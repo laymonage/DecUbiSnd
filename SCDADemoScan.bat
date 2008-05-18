@@ -1,0 +1,2 @@
+@rem Change the path to use it with something other than the demo
+@DecUbiSnd -S "C:\Program Files\UBISOFT\Demo\Tom Clancy's Splinter Cell Double Agent Demo\SCDA-Offline\Sounds\STREAM.SS0" -i 0 -s 96792029 > SCDAScan.seg
