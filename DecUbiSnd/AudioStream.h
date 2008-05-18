@@ -14,8 +14,8 @@ public:
 	CAudioStream(std::istream& Input, std::streamoff Offset, std::streamsize Size);
 	virtual ~CAudioStream();
 
-	virtual unsigned long RecommendBufferLength();
+	virtual unsigned long RecommendBufferLength() const;
 	virtual bool Decode(short* Buffer, unsigned long& NumberSamples)=0;
-	virtual unsigned long GetSampleRate()=0;
-	virtual unsigned char GetChannels()=0;
+	virtual unsigned long GetSampleRate() const=0;
+	virtual unsigned char GetChannels() const=0;
 };

@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "Version5Stream.h"
 #include "Scan.h"
+#include "SegmentParser.h"
 #include "WaveWriter.h"
 
 // The action to be taken
@@ -28,7 +29,8 @@ struct SArguments
 		InputTypeForce(0),
 		OutputFilename(""),
 		OuputWaveFile(true),
-		OutputSampleRate(0)
+		OutputSampleRate(0),
+		SegmentFilename("")
 	{
 	};
 
@@ -44,6 +46,7 @@ struct SArguments
 	std::string OutputFilename;
 	bool OuputWaveFile;
 	unsigned long OutputSampleRate;
+	std::string SegmentFilename;
 };
 
 // Parse the arguments sent to the program
@@ -82,6 +85,14 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 				return false;
 			}
 			Args.InputSize=atol(Argv[i++]);
+		}
+		else if(Arg=="-g" || Arg=="--segments")
+		{
+			if(i>=Argc)
+			{
+				return false;
+			}
+			Args.SegmentFilename=std::string(Argv[i++]);
 		}
 		else if(Arg=="--header-size")
 		{
@@ -178,12 +189,12 @@ int Decode(SArguments& Args)
 	// Check the arguments
 	if(Args.InputFilename=="")
 	{
-		std::cout << "Input file not specified." << std::endl;
+		std::cerr << "Input file not specified." << std::endl;
 		return 1;
 	}
 	if(Args.OutputFilename=="")
 	{
-		std::cout << "Output file not specified." << std::endl;
+		std::cerr << "Output file not specified." << std::endl;
 		return 1;
 	}
 
@@ -192,7 +203,7 @@ int Decode(SArguments& Args)
 	Input.open(Args.InputFilename.c_str(), std::ios_base::in | std::ios_base::binary);
 	if(!Input.is_open())
 	{
-		std::cout << "Unable to open input file '" << Args.InputFilename << "'." << std::endl;
+		std::cerr << "Unable to open input file '" << Args.InputFilename << "'." << std::endl;
 		return 2;
 	}
 
@@ -201,59 +212,99 @@ int Decode(SArguments& Args)
 	Output.open(Args.OutputFilename.c_str(), std::ios_base::out | std::ios_base::trunc | std::ios_base::binary);
 	if(!Output.is_open())
 	{
-		std::cout << "Unable to open output file '" << Args.OutputFilename << "'." << std::endl;
+		std::cerr << "Unable to open output file '" << Args.OutputFilename << "'." << std::endl;
 		return 3;
 	}
 
-	// Get the type
-	unsigned char InputType=Args.InputTypeForce;
-	Input.seekg((std::streamoff)Args.InputOffset);
-	if(InputType==0)
+	// Open the segment file stream and parse the segments
+	CSegmentParser Segments;
+	if(!Args.SegmentFilename.empty())
 	{
-		InputType=Input.get();
+		std::ifstream SegmentFile;
+		SegmentFile.open(Args.SegmentFilename.c_str(), std::ios_base::in);
+		if(!SegmentFile.is_open())
+		{
+			std::cerr << "Unable to open segment definition file '" << Args.SegmentFilename << "'." << std::endl;
+			return 104;
+		}
+		if(!Segments.Parse(SegmentFile))
+		{
+			SegmentFile.close();
+			std::cerr << "Segment file parsing failed." << std::endl;
+			std::cerr << Segments.GetParserMessage() << std::endl;
+			return 105;
+		}
+		SegmentFile.close();
+
+		// TODO: Give a little hint about the filename not being right?
 	}
-	else
+
+	// Check the segments
+	if(Segments.GetSegmentCount()<1)
 	{
-		Input.get();
+		CSegment Seg(Args.InputOffset, Args.InputSize);
+		Segments.AppendSegment(Seg);
 	}
 
 	// Prepare for the wave header, if required
 	unsigned long SampleRate;
 	unsigned char BitsPerSample;
-	unsigned char Channels;
+	unsigned char Channels=2;
 	unsigned long NumberSamples=0;
 	if(Args.OuputWaveFile)
 	{
 		PrepareWaveHeader(Output);
 	}
 
-	// Decompress the audio
-	if(InputType==3 || InputType==5)
+	for(unsigned long i=0;i<Segments.GetSegmentCount();i++)
 	{
-		// TODO: Check the force parameter
-
-		// Decode the stream
-		CVersion5Stream Stream(Input, (std::streamoff)Args.InputOffset, (std::streamsize)Args.InputSize);
-		if(!Stream.InitHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+		// Get the current segment
+		CSegment Segment(Segments.GetSegment(i));
+		unsigned long LocalNumberSamples=0;
+		if(Segment.GetSkip())
 		{
-			std::cout << "Problems initializing the header." << std::endl;
-			return 5;
-		}
-		if(StreamDecoder(Stream, Output, NumberSamples))
-		{
-			std::cout << "Problems decompressing the input file." << std::endl;
+			continue;
 		}
 
-		// Set the information
-		SampleRate=Stream.GetSampleRate();
-		BitsPerSample=16;
-		Channels=Stream.GetChannels();
-	}
-	else
-	{
-		std::cout << "The input file is not a supported format. ";
-		std::cout << "Use --input-type to force a specific format." << std::endl;
-		return 4;
+		// Get the type
+		unsigned char InputType=Args.InputTypeForce;
+		Input.seekg(Segment.GetOffset());
+		if(InputType==0)
+		{
+			InputType=Input.get();
+		}
+		else
+		{
+			Input.get();
+		}
+
+		// Decompress the audio
+		if(InputType==3 || InputType==5)
+		{
+			// Decode the stream
+			CVersion5Stream Stream(Input, Segment.GetOffset(), Segment.GetSize());
+			if(!Stream.InitHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			{
+				std::cerr << "Problems initializing the header." << std::endl;
+				continue;
+			}
+			if(StreamDecoder(Stream, Output, LocalNumberSamples))
+			{
+				std::cerr << "Problems decompressing the input file." << std::endl;
+			}
+
+			// Set the information
+			SampleRate=Stream.GetSampleRate();
+			BitsPerSample=16;
+			Channels=Stream.GetChannels();
+			NumberSamples+=LocalNumberSamples;
+		}
+		else
+		{
+			std::cerr << "The input file is not a supported format. ";
+			std::cerr << "Use --input-type to force a specific format." << std::endl;
+			continue;
+		}
 	}
 
 	// Fix the wave header
@@ -276,12 +327,12 @@ int Decode(SArguments& Args)
 int Scan(SArguments& Args)
 {
 	// Print a warning message
-	std::cout << "Warning: The scan feature is experimental. Use it at your own risk." << std::endl;
+	std::cerr << "Warning: The scan feature is experimental. Use it at your own risk." << std::endl;
 
 	// Check the arguments
 	if(Args.InputFilename=="")
 	{
-		std::cout << "Input file not specified." << std::endl;
+		std::cerr << "Input file not specified." << std::endl;
 		return 1;
 	}
 
@@ -290,7 +341,7 @@ int Scan(SArguments& Args)
 	Input.open(Args.InputFilename.c_str(), std::ios_base::in | std::ios_base::binary);
 	if(!Input.is_open())
 	{
-		std::cout << "Unable to open input file '" << Args.InputFilename << "'." << std::endl;
+		std::cerr << "Unable to open input file '" << Args.InputFilename << "'." << std::endl;
 		return 2;
 	}
 
@@ -319,7 +370,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 	// Display banner
 	if(Args.ShowBanner)
 	{
-		std::cout << "Sound/Music Decoder for UBISOFT Formats" << std::endl << std::endl;
+		std::cerr << "Sound/Music Decoder for UBISOFT Formats" << std::endl << std::endl;
 	}
 
 	// Display usage
@@ -343,7 +394,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 	// Check for errors
 	if(!ArgParse)
 	{
-		std::cout << "Parameters are not valid." << std::endl;
+		std::cerr << "Parameters are not valid." << std::endl;
 		return 1;
 	}
 

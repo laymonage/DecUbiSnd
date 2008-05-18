@@ -25,7 +25,7 @@ CAudioStream::~CAudioStream()
 	return;
 }
 
-unsigned long CAudioStream::RecommendBufferLength()
+unsigned long CAudioStream::RecommendBufferLength() const
 {
 	return 65536;
 }

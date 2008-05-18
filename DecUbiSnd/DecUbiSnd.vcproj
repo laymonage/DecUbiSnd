@@ -125,6 +125,12 @@
 				RelativePath=".\Scan.cpp">
 			</File>
 			<File
+				RelativePath=".\Segment.cpp">
+			</File>
+			<File
+				RelativePath=".\SegmentParser.cpp">
+			</File>
+			<File
 				RelativePath=".\stdafx.cpp">
 				<FileConfiguration
 					Name="Debug|Win32">
@@ -158,6 +164,12 @@
 			</File>
 			<File
 				RelativePath=".\Scan.h">
+			</File>
+			<File
+				RelativePath=".\Segment.h">
+			</File>
+			<File
+				RelativePath=".\SegmentParser.h">
 			</File>
 			<File
 				RelativePath=".\stdafx.h">
