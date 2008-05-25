@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "Version5Stream.h"
+#include "InterleavedStream.h"
 #include "Scan.h"
 #include "SegmentParser.h"
 #include "WaveWriter.h"
@@ -24,9 +25,9 @@ struct SArguments
 		InputFilename(""),
 		InputOffset(0),
 		InputSize(0),
-		InputHeaderDebug(72),
 		InputStereo(false),
 		InputTypeForce(0),
+		InputLayer(0),
 		OutputFilename(""),
 		OuputWaveFile(true),
 		OutputSampleRate(0),
@@ -38,11 +39,11 @@ struct SArguments
 	bool ShowBanner;
 	bool ShowUsage;
 	std::string InputFilename;
-	size_t InputOffset;
-	size_t InputSize;
-	size_t InputHeaderDebug;
+	std::streamoff InputOffset;
+	std::streamsize InputSize;
 	bool InputStereo;
 	unsigned char InputTypeForce;
+	unsigned long InputLayer;
 	std::string OutputFilename;
 	bool OuputWaveFile;
 	unsigned long OutputSampleRate;
@@ -94,14 +95,6 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 			}
 			Args.SegmentFilename=std::string(Argv[i++]);
 		}
-		else if(Arg=="--header-size")
-		{
-			if(i>=Argc)
-			{
-				return false;
-			}
-			Args.InputHeaderDebug=atol(Argv[i++]);
-		}
 		else if(Arg=="-t" || Arg=="--stereo")
 		{
 			Args.InputStereo=true;
@@ -117,6 +110,14 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 				return false;
 			}
 			Args.InputTypeForce=atoi(Argv[i++]);
+		}
+		else if(Arg=="-l" || Arg=="--layer")
+		{
+			if(i>=Argc)
+			{
+				return false;
+			}
+			Args.InputLayer=atoi(Argv[i++]);
 		}
 		else if(Arg=="-o" || Arg=="--output")
 		{
@@ -150,40 +151,6 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 	return true;
 }
 
-int StreamDecoder(CAudioStream& Stream, std::ostream& Output, unsigned long& DecodedSamples)
-{
-	// Create the buffers
-	unsigned long OutputBufferLength=Stream.RecommendBufferLength();
-	short* OutputBuffer=new short[OutputBufferLength];
-	DecodedSamples=0;
-
-	// Do the loop
-	while(true)
-	{
-		// Decode some
-		unsigned long NumberSamples=OutputBufferLength;
-		if(!Stream.Decode(OutputBuffer, NumberSamples))
-		{
-			delete [] OutputBuffer;
-			return 5;
-		}
-
-		// Check if any was decoded
-		if(NumberSamples==0)
-		{
-			break;
-		}
-
-		// Write it to the output stream
-		DecodedSamples+=NumberSamples;
-		Output.write((char*)OutputBuffer, NumberSamples*2);
-	}
-
-	// Clean up
-	delete [] OutputBuffer;
-	return 0;
-}
-
 int Decode(SArguments& Args)
 {
 	// Check the arguments
@@ -205,6 +172,17 @@ int Decode(SArguments& Args)
 	{
 		std::cerr << "Unable to open input file '" << Args.InputFilename << "'." << std::endl;
 		return 2;
+	}
+
+	// If the size is not specified, compute it
+	if(Args.InputSize==0)
+	{
+		Input.seekg(0, std::ios_base::end);
+		if(Args.InputOffset<=Input.tellg())
+		{
+			Args.InputSize=(std::streamoff)Input.tellg()-Args.InputOffset;
+		}
+		Input.seekg(0);
 	}
 
 	// Open the output stream
@@ -247,8 +225,8 @@ int Decode(SArguments& Args)
 	}
 
 	// Prepare for the wave header, if required
-	unsigned long SampleRate;
-	unsigned char BitsPerSample;
+	unsigned long SampleRate=0;
+	unsigned char BitsPerSample=0;
 	unsigned char Channels=2;
 	unsigned long NumberSamples=0;
 	if(Args.OuputWaveFile)
@@ -283,12 +261,33 @@ int Decode(SArguments& Args)
 		{
 			// Decode the stream
 			CVersion5Stream Stream(Input, Segment.GetOffset(), Segment.GetSize());
-			if(!Stream.InitHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
 			{
 				std::cerr << "Problems initializing the header." << std::endl;
 				continue;
 			}
-			if(StreamDecoder(Stream, Output, LocalNumberSamples))
+			if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+			{
+				std::cerr << "Problems decompressing the input file." << std::endl;
+			}
+
+			// Set the information
+			SampleRate=Stream.GetSampleRate();
+			BitsPerSample=16;
+			Channels=Stream.GetChannels();
+			NumberSamples+=LocalNumberSamples;
+		}
+		else if(InputType==8)
+		{
+			// Decode the stream
+			CInterleavedStream Stream(Input, Segment.GetOffset(), Segment.GetSize());
+			Stream.SetParam("Layer", Args.InputLayer);
+			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			{
+				std::cerr << "Problems initializing the header." << std::endl;
+				continue;
+			}
+			if(!Stream.DecodeToFile(Output, LocalNumberSamples))
 			{
 				std::cerr << "Problems decompressing the input file." << std::endl;
 			}
@@ -345,6 +344,17 @@ int Scan(SArguments& Args)
 		return 2;
 	}
 
+	// If the size is not specified, compute it
+	if(Args.InputSize==0)
+	{
+		Input.seekg(0, std::ios_base::end);
+		if(Args.InputOffset<=Input.tellg())
+		{
+			Args.InputSize=Input.tellg()-Args.InputOffset;
+		}
+		Input.seekg(0);
+	}
+
 	// Open the output stream, if required
 	// TODO: This
 
@@ -384,9 +394,11 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  -s, --size Number     Specify the number of bytes to decode" << std::endl;
 		std::cout << "  -t, --stereo          The sound is stereo" << std::endl;
 		std::cout << "  -m, --mono            The sound is mono" << std::endl;
+		std::cout << "  -l, --layer Number    Specify the layer number (starts at 0)" << std::endl;
+		std::cout << "  -g, --segments File   Use a segment definition file" << std::endl;
 		std::cout << std::endl;
 		//std::cout << "  --header-size Number  Specify the header size" << std::endl;
-		std::cout << "  --input-type Type     Force it to use the decoder for Type (3 or 5)" << std::endl;
+		std::cout << "  --input-type Type     Force it to use the decoder for Type (3, 5, or 8)?" << std::endl;
 		std::cout << "  --sample-rate Rate    Force a specific sampling rate" << std::endl;
 		std::cout << std::endl;
 	}
