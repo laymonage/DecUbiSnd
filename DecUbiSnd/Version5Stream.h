@@ -1,10 +1,11 @@
 // Version5Stream.h : UbiSoft version 3 and 5 audio stream decoding
 //
 
-#include "AudioStream.h"
+#pragma once
+#include "StreamHelper.h"
 
 // Provides UbiSoft version 3 and 5 audio stream decoding
-class CVersion5Stream : public CAudioStream
+class CVersion5Stream : public CStreamHelper
 {
 protected:
 	unsigned char m_Type;
@@ -14,13 +15,17 @@ protected:
 	unsigned char m_LeftIndex;
 	unsigned char m_RightIndex;
 
+protected:
+	virtual bool DoDecodeBlock(unsigned long MaxInputBytes);
+
 public:
 	CVersion5Stream(std::istream& Input, std::streamsize Size);
 	CVersion5Stream(std::istream& Input, std::streamoff Offset, std::streamsize Size);
 	virtual ~CVersion5Stream();
 
-	virtual bool InitHeader(unsigned char Channels, unsigned char Force=0);
-	virtual bool Decode(short* Buffer, unsigned long& NumberSamples);
+	virtual bool InitializeHeader();
+	virtual bool InitializeHeader(unsigned char Channels, unsigned char Force=0);
 	virtual unsigned long GetSampleRate() const;
 	virtual unsigned char GetChannels() const;
+	virtual std::string GetFormatName() const;
 };

@@ -1,6 +1,7 @@
 // SegmentParser.h : Segment definition file parser
 //
 
+#pragma once
 #include "Segment.h"
 
 class CSegmentParser
