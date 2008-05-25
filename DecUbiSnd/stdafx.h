@@ -13,4 +13,5 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <map>
 #include <assert.h>

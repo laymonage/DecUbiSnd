@@ -6,7 +6,7 @@
 #include "Adpcm.h"
 
 CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamsize Size) :
-	CAudioStream(Input, Size),
+	CStreamHelper(Input, Size),
 	m_Type(5),
 	m_Stereo(true),
 	m_LeftSample(0),
@@ -18,7 +18,7 @@ CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamsize Size) :
 }
 
 CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamoff Offset, std::streamsize Size) :
-	CAudioStream(Input, Offset, Size),
+	CStreamHelper(Input, Offset, Size),
 	m_Type(5),
 	m_Stereo(true),
 	m_LeftSample(0),
@@ -34,7 +34,12 @@ CVersion5Stream::~CVersion5Stream()
 	return;
 }
 
-bool CVersion5Stream::InitHeader(unsigned char Channels, unsigned char Force)
+bool CVersion5Stream::InitializeHeader()
+{
+	return InitializeHeader(0);
+}
+
+bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char Force)
 {
 	// Check the parameters
 	if(Channels<0 || Channels>2)
@@ -113,48 +118,27 @@ bool CVersion5Stream::InitHeader(unsigned char Channels, unsigned char Force)
 	return true;
 }
 
-bool CVersion5Stream::Decode(short* Buffer, unsigned long& NumberSamples)
+bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
 {
-	// Check arguments
-	if(!Buffer)
-	{
-		return false;
-	}
-	if(NumberSamples==0 || NumberSamples%2!=0)
-	{
-		return false;
-	}
-	// Check to make sure the file offset is sane
-	if(m_Input.tellg()<m_BeginOffset)
-	{
-		return false;
-	}
-	if(m_Input.tellg()>=m_EndOffset)
-	{
-		NumberSamples=0;
-		return true;
-	}
+	// Prepare the buffers
+	PrepareInputBuffer(RecommendBufferLength()/2);
+	PrepareOutputBuffer(RecommendBufferLength());
+	FillInputBuffer(min(m_InputBufferLength,  MaxInputBytes));
 
 	// Calculate how many samples are needed
-	unsigned long SamplesLeft=(m_EndOffset-m_Input.tellg())*2;
-	unsigned long BytesLeft;
-	if(SamplesLeft<NumberSamples)
+	m_OutputBufferUsed=m_InputBufferUsed*2;
+	if(m_OutputBufferUsed<1)
 	{
-		NumberSamples=SamplesLeft;
+		return true;
 	}
-	BytesLeft=NumberSamples/2;
-
-	// Allocate a buffer and read into the file
-	unsigned char* InputBuffer=new unsigned char[BytesLeft];
-	m_Input.read((char*)InputBuffer, BytesLeft);
 
 	// Do the decompression
 	if(!m_Stereo)
 	{
 		SAdpcmMonoParam Param;
-		Param.InputBuffer=InputBuffer;
-		Param.InputLength=BytesLeft;
-		Param.OutputBuffer=Buffer;
+		Param.InputBuffer=m_InputBuffer;
+		Param.InputLength=m_InputBufferUsed;
+		Param.OutputBuffer=m_OutputBuffer;
 		Param.FirstSample=m_LeftSample;
 		Param.FirstIndex=m_LeftIndex;
 		DecompressMonoAdpcm(&Param);
@@ -166,9 +150,9 @@ bool CVersion5Stream::Decode(short* Buffer, unsigned long& NumberSamples)
 	else
 	{
 		SAdpcmStereoParam Param;
-		Param.InputBuffer=InputBuffer;
-		Param.InputLength=BytesLeft;
-		Param.OutputBuffer=Buffer;
+		Param.InputBuffer=m_InputBuffer;
+		Param.InputLength=m_InputBufferUsed;
+		Param.OutputBuffer=m_OutputBuffer;
 		Param.FirstLeftSample=m_LeftSample;
 		Param.FirstLeftIndex=m_LeftIndex;
 		Param.FirstRightSample=m_RightSample;
@@ -180,8 +164,8 @@ bool CVersion5Stream::Decode(short* Buffer, unsigned long& NumberSamples)
 		m_RightIndex=Param.FirstRightIndex;
 	}
 
-	// Clean up
-	delete [] InputBuffer;
+	// All of the input buffer was used
+	m_InputBufferOffset=m_InputBufferUsed;
 	return true;
 }
 
@@ -190,11 +174,11 @@ unsigned long CVersion5Stream::GetSampleRate() const
 	// Check each possible type
 	if(m_Type==3)
 	{
-		return 32000;
+		return 36000;
 	}
 	else if(m_Type==5)
 	{
-		return 44100;
+		return 48000;
 	}
 	return 22050;
 }
@@ -202,4 +186,18 @@ unsigned long CVersion5Stream::GetSampleRate() const
 unsigned char CVersion5Stream::GetChannels() const
 {
 	return m_Stereo ? 2 : 1;
+}
+
+std::string CVersion5Stream::GetFormatName() const
+{
+	// Check each possible type
+	if(m_Type==3)
+	{
+		return "ubichunk3";
+	}
+	else if(m_Type==5)
+	{
+		return "ubichunk5";
+	}
+	return "unknown";
 }

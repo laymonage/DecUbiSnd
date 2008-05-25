@@ -1,6 +1,8 @@
 // Segment.h : Segment definition
 //
 
+#pragma once
+
 class CSegment
 {
 protected:

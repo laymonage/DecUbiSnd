@@ -1,6 +1,8 @@
 // ADPCM.h : Decompresses ADPCM waveforms
 //
 
+#pragma once
+
 // Mono decompression parameters
 struct SAdpcmMonoParam
 {
