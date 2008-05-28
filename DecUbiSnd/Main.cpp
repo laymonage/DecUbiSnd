@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include "Version5Stream.h"
 #include "InterleavedStream.h"
+#include "OldInterleavedStream.h"
 #include "Scan.h"
 #include "SegmentParser.h"
 #include "WaveWriter.h"
@@ -281,6 +282,27 @@ int Decode(SArguments& Args)
 		{
 			// Decode the stream
 			CInterleavedStream Stream(Input, Segment.GetOffset(), Segment.GetSize());
+			Stream.SetParam("Layer", Args.InputLayer);
+			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			{
+				std::cerr << "Problems initializing the header." << std::endl;
+				continue;
+			}
+			if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+			{
+				std::cerr << "Problems decompressing the input file." << std::endl;
+			}
+
+			// Set the information
+			SampleRate=Stream.GetSampleRate();
+			BitsPerSample=16;
+			Channels=Stream.GetChannels();
+			NumberSamples+=LocalNumberSamples;
+		}
+		else if(InputType==2)
+		{
+			// Decode the stream
+			COldInterleavedStream Stream(Input, Segment.GetOffset(), Segment.GetSize());
 			Stream.SetParam("Layer", Args.InputLayer);
 			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
 			{

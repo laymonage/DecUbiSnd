@@ -42,7 +42,7 @@ bool CInterleavedStream::SetLayer(long Layer)
 	return true;
 }
 
-long CInterleavedStream::GetLayer()
+long CInterleavedStream::GetLayer() const
 {
 	return m_Layer;
 }
@@ -97,27 +97,56 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 	m_Input.seekg(4, std::ios_base::cur);
 	m_SubType=(ESubType)SubType;
 
+	// Warn if the sub-type is not recognized
+	if(m_SubType!=ST_PCM && m_SubType!=ST_ADPCM)
+	{
+		std::cerr << "Warning: Unknown sub-type " << m_SubType << "." << std::endl;
+	}
+
 	// Process the second header
+	std::vector<unsigned long> HeaderSizes;
 	for(unsigned long i=0;i<NumberLayers;i++)
 	{
 		SInterleavedLayer Layer;
 
-		// TODO: Do something with the unsigned long?
-		m_Input.seekg(4, std::ios_base::cur);
+		// Read the audio header size
+		unsigned long HeaderSize;
+		m_Input.read((char*)&HeaderSize, 4);
+		HeaderSizes.push_back(HeaderSize);
 
 		// Add it
 		Layer.First=true;
 		m_Layers.push_back(Layer);
 	}
 
-	// Read and process the third header, if it exists
-	if(m_SubType==ST_ADPCM)
+	// Read the audio headers
+	for(unsigned long i=0;i<m_Layers.size();i++)
 	{
-		for(unsigned long i=0;i<m_Layers.size();i++)
+		// Some variables
+		const unsigned long HeaderSize=HeaderSizes[i];
+		const std::streamoff SeekToOffset=(std::streamoff)m_Input.tellg()+HeaderSize;
+
+		// Process each header based on what type this is
+		if(m_SubType==ST_ADPCM)
 		{
-			// Read the header inside
-			// TODO: Check
-			m_Input.seekg(16, std::ios_base::cur);
+			// Check the header size
+			if(HeaderSize<28)
+			{
+				std::cerr << "Error: Header size is unrecognized and too small (ADPCM, " << HeaderSize << " bytes, should be " << 28 << ")" << std::endl;
+				return false;
+			}
+			else if(HeaderSize!=28)
+			{
+				std::cerr << "Warning: Header size is unrecognized (ADPCM, " << HeaderSize << " bytes, should be " << 28 << ")" << std::endl;
+			}
+
+			// Read the header
+			if(m_Input.get()!=5)
+			{
+				std::cerr << "Warning: This doesn't appear to be the standard header for interleaved streams" << std::endl;
+			}
+			m_Input.seekg(13, std::ios_base::cur);
+			m_Input.read((char*)&m_Layers[i].NumberExtraSamples, 2);
 			m_Input.read((char*)&m_Layers[i].LeftSample, 2);
 			m_Input.read((char*)&m_Layers[i].LeftIndex, 1);
 			m_Input.seekg(1, std::ios_base::cur);
@@ -140,14 +169,28 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 			{
 				m_Layers[i].Stereo=true;
 			}
+
+			// Give a warning if the number of extra samples is unrecognized
+			if(m_Layers[i].NumberExtraSamples!=10)
+			{
+				std::cerr << "Warning: The number of extra uncompressed samples is unrecognized (" << m_Layers[i].NumberExtraSamples << " samples)" << std::endl;
+			}
+			if(m_Layers[i].Stereo)
+			{
+				m_Layers[i].NumberExtraSamples*=2;
+			}
 		}
-	}
-	else if(m_SubType==ST_PCM)
-	{
-	}
-	else
-	{
-		std::cerr << "Warning: Unknown sub-type " << m_SubType << "." << std::endl;
+		else if(m_SubType==ST_PCM)
+		{
+			// This should have no header
+			if(HeaderSize!=0)
+			{
+				std::cerr << "Warning: Header size is unrecognized (PCM, " << HeaderSize << " bytes, should be " << 0 << ")" << std::endl;
+			}
+		}
+
+		// Seek to the position we should be at
+		m_Input.seekg(SeekToOffset);
 	}
 	return true;
 }
@@ -209,18 +252,16 @@ bool CInterleavedStream::DoDecodeBlock(unsigned long MaxInputBytes)
 		// Subtract the first header from it
 		if(m_Layers[i].First)
 		{
-			if(m_SubType==ST_ADPCM)
+			if(m_SubType==ST_ADPCM && m_Layers[i].NumberExtraSamples)
 			{
-				if(!m_Layers[i].Stereo)
-				{
-					m_InputBufferOffset+=20;
-					AudioSize-=20;
-				}
-				else
-				{
-					m_InputBufferOffset+=40;
-					AudioSize-=40;
-				}
+				// Copy the data
+				memcpy(m_OutputBuffer+m_OutputBufferUsed, m_InputBuffer+m_InputBufferOffset, m_Layers[i].NumberExtraSamples*2);
+
+				// Update the positions
+				m_InputBufferOffset+=m_Layers[i].NumberExtraSamples*2;
+				m_OutputBufferUsed+=m_Layers[i].NumberExtraSamples;
+				AudioSize-=m_Layers[i].NumberExtraSamples*2;
+				m_Layers[i].NumberExtraSamples=0;
 			}
 			m_Layers[i].First=false;
 		}

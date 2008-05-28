@@ -9,6 +9,7 @@ class CVersion5Stream : public CStreamHelper
 {
 protected:
 	unsigned char m_Type;
+	unsigned short m_NumberExtraSamples;
 	bool m_Stereo;
 	short m_LeftSample;
 	short m_RightSample;

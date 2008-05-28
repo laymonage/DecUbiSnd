@@ -4,10 +4,11 @@
 #pragma once
 #include "StreamHelper.h"
 
-// Information associated with each stream
+// Information associated with each layer
 struct SInterleavedLayer
 {
 	bool Stereo;
+	unsigned short NumberExtraSamples;
 	short LeftSample;
 	short RightSample;
 	unsigned char LeftIndex;
@@ -16,7 +17,7 @@ struct SInterleavedLayer
 	bool First;
 };
 
-// Provides UbiSoft version 3 and 5 audio stream decoding
+// Provides UbiSoft version 8 interleaved audio stream decoding
 class CInterleavedStream : public CStreamHelper
 {
 public:
@@ -44,7 +45,7 @@ public:
 	virtual ~CInterleavedStream();
 
 	virtual bool SetLayer(long Layer);
-	virtual long GetLayer();
+	virtual long GetLayer() const;
 	virtual bool InitializeHeader();
 	virtual bool InitializeHeader(unsigned char Channels, unsigned char Force=0);
 	virtual unsigned long GetSampleRate() const;
