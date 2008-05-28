@@ -5,9 +5,12 @@
 #include "Version5Stream.h"
 #include "Adpcm.h"
 
+#define SwapWord(_Word) ((((unsigned short)(_Word)&0xFF00)>>8) | (((unsigned short)(_Word)&0x00FF)<<8))
+
 CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamsize Size) :
 	CStreamHelper(Input, Size),
 	m_Type(5),
+	m_NumberExtraSamples(0),
 	m_Stereo(true),
 	m_LeftSample(0),
 	m_LeftIndex(0),
@@ -20,6 +23,7 @@ CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamsize Size) :
 CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamoff Offset, std::streamsize Size) :
 	CStreamHelper(Input, Offset, Size),
 	m_Type(5),
+	m_NumberExtraSamples(0),
 	m_Stereo(true),
 	m_LeftSample(0),
 	m_LeftIndex(0),
@@ -73,7 +77,8 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 	}
 
 	// Read the rest of the first header
-	m_Input.seekg(15, std::ios_base::cur);
+	m_Input.seekg(13, std::ios_base::cur);
+	m_Input.read((char*)&m_NumberExtraSamples, 2);
 	m_Input.read((char*)&m_LeftSample, 2);
 	m_Input.read((char*)&m_LeftIndex, 1);
 	m_Input.seekg(1, std::ios_base::cur);
@@ -81,11 +86,12 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 	m_Input.read((char*)&m_RightIndex, 1);
 	m_Input.seekg(5, std::ios_base::cur);
 
-	// The samples are big-endian for some reason
+	// Theses are big-endian for some reason
 	if(m_Type==3)
 	{
-		m_LeftSample=(((unsigned short)m_LeftSample&0xFF00)>>8) | (((unsigned short)m_LeftSample&0x00FF)<<8);
-		m_RightSample=(((unsigned short)m_RightSample&0xFF00)>>8) | (((unsigned short)m_RightSample&0x00FF)<<8);
+		m_NumberExtraSamples=SwapWord(m_NumberExtraSamples);
+		m_LeftSample=SwapWord(m_LeftSample);
+		m_RightSample=SwapWord(m_RightSample);
 	}
 
 	// Figure out whether it is mono or stereo
@@ -104,22 +110,45 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 		m_Stereo=true;
 	}
 
-	// Scan through the second header
-	if(!m_Stereo)
+	// Give a warning if the number of extra samples is unrecognized
+	if(m_NumberExtraSamples!=10)
 	{
-		// Perhaps this should not be hardcoded, but rather corresponds to something
-		// in the header?
-		m_Input.seekg(20, std::ios_base::cur);
+		std::cerr << "Warning: The number of extra uncompressed samples is unrecognized (" << m_NumberExtraSamples << " samples)" << std::endl;
 	}
-	else
+	if(m_Stereo)
 	{
-		m_Input.seekg(40, std::ios_base::cur);
+		m_NumberExtraSamples*=2;
 	}
 	return true;
 }
 
 bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
 {
+	// Process the uncompressed samples
+	if(m_NumberExtraSamples)
+	{
+		// Prepare the buffers
+		PrepareInputBuffer(m_NumberExtraSamples*2);
+		PrepareOutputBuffer(m_NumberExtraSamples);
+		FillInputBuffer(min(m_InputBufferLength,  MaxInputBytes));
+
+		// Process the bytes
+		for(;m_InputBufferOffset<m_InputBufferUsed;m_InputBufferOffset+=2)
+		{
+			if(m_Type==3)
+			{
+				m_OutputBuffer[m_OutputBufferUsed]=SwapWord(m_InputBuffer[m_InputBufferOffset]);
+			}
+			else
+			{
+				m_OutputBuffer[m_OutputBufferUsed]=m_InputBuffer[m_InputBufferOffset];
+			}
+			m_OutputBufferUsed++;
+			m_NumberExtraSamples--;
+		}
+		return true;
+	}
+
 	// Prepare the buffers
 	PrepareInputBuffer(RecommendBufferLength()/2);
 	PrepareOutputBuffer(RecommendBufferLength());

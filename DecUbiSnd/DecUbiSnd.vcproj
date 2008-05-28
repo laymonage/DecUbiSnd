@@ -125,6 +125,9 @@
 				RelativePath=".\Main.cpp">
 			</File>
 			<File
+				RelativePath=".\OldInterleavedStream.cpp">
+			</File>
+			<File
 				RelativePath=".\Scan.cpp">
 			</File>
 			<File
@@ -170,6 +173,9 @@
 			</File>
 			<File
 				RelativePath=".\InterleavedStream.h">
+			</File>
+			<File
+				RelativePath=".\OldInterleavedStream.h">
 			</File>
 			<File
 				RelativePath=".\Scan.h">
