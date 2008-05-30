@@ -5,26 +5,27 @@
 #include "Scan.h"
 
 // Do the actual scanning, to figure out roughly when the next audio is
-static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
+static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsize& BytesRead, std::streamsize& FullSize)
 {
 	// Just check first
-	if((size_t)Input.tellg()>=EndOffset)
+	if(Input.tellg()>=EndOffset)
 	{
 		return false;
 	}
 
 	// Some variables
-	const size_t InputBufferLength=65535;
+	const unsigned long InputBufferLength=65535;
 	unsigned char* Buffer=new unsigned char[InputBufferLength];
-	size_t BytesLeft=EndOffset-Input.tellg();
-	size_t StartOffset=Input.tellg();
+	std::streamsize BytesLeft=EndOffset-Input.tellg();
+	std::streamoff StartOffset=Input.tellg();
+	FullSize=0;
 
 	// The scanning loop
-	while((size_t)Input.tellg()<EndOffset)
+	while(Input.tellg()<EndOffset)
 	{
 		// Calculate the amount of data that needs to be read
-		size_t NextRead;
-		size_t CurrentOffset=Input.tellg();
+		std::streamsize NextRead;
+		std::streamoff CurrentOffset=Input.tellg();
 		if(BytesLeft>InputBufferLength)
 		{
 			NextRead=InputBufferLength;
@@ -45,14 +46,14 @@ static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
 		BytesLeft-=NextRead;
 
 		// Process the data in a for loop
-		size_t OffsetReset=Input.tellg();
+		std::streamoff OffsetReset=Input.tellg();
 		for(unsigned long i=0;i<(unsigned long)NextRead;i++)
 		{
+			// Store some variables
+			const std::streamoff ChunkStart=(std::streamoff)CurrentOffset+i;
+
 			if(Buffer[i]==3 || Buffer[i]==5)
 			{
-				// Store some variables
-				const std::streamoff ChunkStart=(std::streamoff)CurrentOffset+i;
-
 				// Some assumptions
 				unsigned char Char[28];
 				bool ChunkValid=false;
@@ -63,7 +64,7 @@ static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
 
 				// Check the characters
 				if(Char[9]==0 && Char[10]==0 && Char[11]==0 && Char[18]<89 && \
-					(Char[19]==0 || Char[19]==119) && Char[22]<89 && Char[23]<5)
+					/*(Char[19]==0 || Char[19]==119) &&*/ Char[22]<89 /*&& Char[23]<5*/)
 				{
 					ChunkValid=true;
 				}
@@ -84,7 +85,7 @@ static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
 					}
 				}
 
-				// If the 
+				// If the chunk is valid
 				if(ChunkValid)
 				{
 					// The file is valid so far, so return success
@@ -97,6 +98,123 @@ static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
 				// If this was just a false alarm
 				Input.seekg((std::streamoff)(OffsetReset));
 			}
+			else if(Buffer[i]==2)
+			{
+				// Some assumptions
+				unsigned char Char[24];
+				bool ChunkValid=false;
+
+				// Read in the characters
+				Input.seekg(ChunkStart);
+				Input.read((char*)Char, 24);
+
+				// Get the full size
+				FullSize=*((unsigned long*)(Char+8))+2;
+
+				// Check the characters
+				if(Char[0]==2 && Char[1]==0 && Char[2]==0 && Char[3]==0 && \
+					Char[5]==0 && Char[6]==0 && Char[7]==0)
+				{
+					ChunkValid=true;
+				}
+
+				// Check the full size
+				if(ChunkValid && (FullSize<64 || FullSize>EndOffset-ChunkStart))
+				{
+					ChunkValid=false;
+				}
+
+				// TODO: Walk the blocks
+
+				// If the chunk is valid
+				if(ChunkValid)
+				{
+					// The file is valid so far, so return success
+					Input.seekg(ChunkStart);
+					BytesRead=ChunkStart-StartOffset;
+					delete [] Buffer;
+					return true;
+				}
+
+				// If this was just a false alarm
+				Input.seekg((std::streamoff)(OffsetReset));
+				FullSize=0;
+			}
+			else if(Buffer[i]==8)
+			{
+				// Some assumptions
+				unsigned char Char[28];
+				bool ChunkValid=false;
+
+				// Read in the characters
+				Input.seekg(ChunkStart);
+				Input.read((char*)Char, 28);
+
+				// Check the characters
+				if(Char[0]==8 && Char[1]==0 && Char[3]==0 && \
+					Char[9]==0 && Char[10]==0 && Char[11]==0)
+				{
+					ChunkValid=true;
+				}
+
+				// Get some information
+				unsigned long NumberLayers=*((unsigned long*)(Char+8));
+				unsigned long NumberBuffers=*((unsigned long*)(Char+12));
+				std::streamsize HeaderSkip=*((unsigned long*)(Char+20));
+
+				// Verify the information
+				if(HeaderSkip>=EndOffset-ChunkStart || HeaderSkip<(std::streamsize)NumberLayers*4)
+				{
+					ChunkValid=false;
+				}
+
+				// Walk the blocks
+				if(ChunkValid)
+				{
+					Input.seekg(HeaderSkip, std::ios_base::cur);
+					for(unsigned long i=0;i<NumberBuffers;i++)
+					{
+						unsigned long Signature;
+						std::streamsize TotalBytes=0;
+
+						Input.read((char*)&Signature, 4);
+						Input.seekg(4, std::ios_base::cur);
+						for(unsigned long j=0;j<NumberLayers;j++)
+						{
+							unsigned long Size;
+							Input.read((char*)&Size, 4);
+							TotalBytes+=Size;
+						}
+
+						if(Signature!=3)
+						{
+							ChunkValid=false;
+							break;
+						}
+						if(TotalBytes>=EndOffset-ChunkStart || TotalBytes<(std::streamsize)NumberLayers*4+8)
+						{
+							ChunkValid=false;
+							break;
+						}
+						Input.seekg(TotalBytes, std::ios_base::cur);
+					}
+					FullSize=Input.tellg()-ChunkStart;
+				}
+
+				// If the chunk is valid
+				if(ChunkValid)
+				{
+					// The file is valid so far, so return success
+					Input.seekg(ChunkStart);
+					BytesRead=ChunkStart-StartOffset;
+					delete [] Buffer;
+					return true;
+				}
+
+				// If this was just a false alarm
+				Input.seekg((std::streamoff)(OffsetReset));
+				FullSize=0;
+			}
 		}
 	}
 
@@ -106,36 +224,66 @@ static bool DoScan(std::istream& Input, size_t EndOffset, size_t& BytesRead)
 }
 
 // List the UbiSoft format audio chunks in the file
-bool ScanAndList(std::istream& Input, size_t EndOffset)
+bool ScanAndList(std::istream& Input, std::streamoff EndOffset)
 {
-	size_t BytesRead;
 	unsigned long NumberFound=0;
-	bool Found=DoScan(Input, EndOffset, BytesRead);
+	std::streamsize BytesRead;
+	std::streamsize SizeReadFromFile=0;
 
+	// Scan for the first chunk
+	bool Found=DoScan(Input, EndOffset, BytesRead, SizeReadFromFile);
+
+	// Loop, until we could find no more chunks
 	while(Found)
 	{
-		size_t ChunkOffset=Input.tellg();
-		Input.seekg(28, std::ios_base::cur);
-		Found=DoScan(Input, EndOffset, BytesRead);
+		// Save the offset of the current chunk (already found)
+		std::streamoff ChunkOffset=Input.tellg();
+
+		// Seek past the current chunk, saving the current chunk size
+		std::streamsize ChunkSize;
+		if(SizeReadFromFile)
+		{
+			ChunkSize=SizeReadFromFile;
+			SizeReadFromFile=0;
+			Input.seekg(ChunkSize, std::ios_base::cur);
+		}
+		else
+		{
+			ChunkSize=0;
+			Input.seekg(28, std::ios_base::cur);
+		}
+
+		// Scan for the next chunk
+		Found=DoScan(Input, EndOffset, BytesRead, SizeReadFromFile);
 		if(Found)
 		{
+			// We already passed the header so we don't find it again
 			BytesRead+=28;
 		}
 		else
 		{
+			// Assume it goes to the end of the file
 			BytesRead=EndOffset-ChunkOffset;
 		}
 
-		if(BytesRead<48)
+		// Make sure the chunk has some reasonable size
+		if(!ChunkSize && BytesRead<48)
 		{
+			// Assume it is a simple chunk
 			// Skip to the next file; this one is too small
 			// The next file cannot start at the next byte
 			Input.seekg(29, std::ios_base::cur);
-			Found=DoScan(Input, EndOffset, BytesRead);
+			Found=DoScan(Input, EndOffset, BytesRead, SizeReadFromFile);
 			continue;
 		}
 
-		std::cout << (int)ChunkOffset << "\t" << (int)BytesRead;
+		// Set some variables
+		if(!ChunkSize)
+		{
+			ChunkSize=BytesRead;
+		}
+
+		std::cout << ChunkOffset << "\t" << ChunkSize;
 		NumberFound++;
 
 		/*unsigned char Char[36];

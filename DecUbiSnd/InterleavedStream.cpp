@@ -97,8 +97,10 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 	m_Input.seekg(4, std::ios_base::cur);
 	m_SubType=(ESubType)SubType;
 
+	// TODO: Forget sub-type; try to detect type by header
+
 	// Warn if the sub-type is not recognized
-	if(m_SubType!=ST_PCM && m_SubType!=ST_ADPCM)
+	if(m_SubType!=ST_PCM && m_SubType!=ST_ADPCM_MONO && m_SubType!=ST_ADPCM_STEREO)
 	{
 		std::cerr << "Warning: Unknown sub-type " << m_SubType << "." << std::endl;
 	}
@@ -127,7 +129,7 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 		const std::streamoff SeekToOffset=(std::streamoff)m_Input.tellg()+HeaderSize;
 
 		// Process each header based on what type this is
-		if(m_SubType==ST_ADPCM)
+		if(m_SubType==ST_ADPCM_MONO || m_SubType==ST_ADPCM_STEREO)
 		{
 			// Check the header size
 			if(HeaderSize<28)
@@ -252,7 +254,7 @@ bool CInterleavedStream::DoDecodeBlock(unsigned long MaxInputBytes)
 		// Subtract the first header from it
 		if(m_Layers[i].First)
 		{
-			if(m_SubType==ST_ADPCM && m_Layers[i].NumberExtraSamples)
+			if((m_SubType==ST_ADPCM_MONO || m_SubType==ST_ADPCM_STEREO) && m_Layers[i].NumberExtraSamples)
 			{
 				// Copy the data
 				memcpy(m_OutputBuffer+m_OutputBufferUsed, m_InputBuffer+m_InputBufferOffset, m_Layers[i].NumberExtraSamples*2);
@@ -267,38 +269,36 @@ bool CInterleavedStream::DoDecodeBlock(unsigned long MaxInputBytes)
 		}
 
 		// Decode the audio
-		if(m_SubType==ST_ADPCM)
+		if(m_SubType==ST_ADPCM_MONO)
 		{
-			if(!m_Layers[i].Stereo)
-			{
-				SAdpcmMonoParam Param;
-				Param.InputBuffer=m_InputBuffer+m_InputBufferOffset;
-				Param.InputLength=AudioSize;
-				Param.OutputBuffer=m_OutputBuffer+m_OutputBufferUsed;
-				Param.FirstSample=m_Layers[i].LeftSample;
-				Param.FirstIndex=m_Layers[i].LeftIndex;
-				DecompressMonoAdpcm(&Param);
-				m_Layers[i].LeftSample=Param.FirstSample;
-				m_Layers[i].LeftIndex=Param.FirstIndex;
-				m_Layers[i].RightSample=0;
-				m_Layers[i].RightIndex=0;
-			}
-			else
-			{
-				SAdpcmStereoParam Param;
-				Param.InputBuffer=m_InputBuffer+m_InputBufferOffset;
-				Param.InputLength=AudioSize;
-				Param.OutputBuffer=m_OutputBuffer+m_OutputBufferUsed;
-				Param.FirstLeftSample=m_Layers[i].LeftSample;
-				Param.FirstLeftIndex=m_Layers[i].LeftIndex;
-				Param.FirstRightSample=m_Layers[i].RightSample;
-				Param.FirstRightIndex=m_Layers[i].RightIndex;
-				DecompressStereoAdpcm(&Param);
-				m_Layers[i].LeftSample=Param.FirstLeftSample;
-				m_Layers[i].LeftIndex=Param.FirstLeftIndex;
-				m_Layers[i].RightSample=Param.FirstRightSample;
-				m_Layers[i].RightIndex=Param.FirstRightIndex;
-			}
+			SAdpcmMonoParam Param;
+			Param.InputBuffer=m_InputBuffer+m_InputBufferOffset;
+			Param.InputLength=AudioSize;
+			Param.OutputBuffer=m_OutputBuffer+m_OutputBufferUsed;
+			Param.FirstSample=m_Layers[i].LeftSample;
+			Param.FirstIndex=m_Layers[i].LeftIndex;
+			DecompressMonoAdpcm(&Param);
+			m_Layers[i].LeftSample=Param.FirstSample;
+			m_Layers[i].LeftIndex=Param.FirstIndex;
+			m_Layers[i].RightSample=0;
+			m_Layers[i].RightIndex=0;
+			OutputSize=AudioSize*2;
+		}
+		else if(m_SubType==ST_ADPCM_STEREO)
+		{
+			SAdpcmStereoParam Param;
+			Param.InputBuffer=m_InputBuffer+m_InputBufferOffset;
+			Param.InputLength=AudioSize;
+			Param.OutputBuffer=m_OutputBuffer+m_OutputBufferUsed;
+			Param.FirstLeftSample=m_Layers[i].LeftSample;
+			Param.FirstLeftIndex=m_Layers[i].LeftIndex;
+			Param.FirstRightSample=m_Layers[i].RightSample;
+			Param.FirstRightIndex=m_Layers[i].RightIndex;
+			DecompressStereoAdpcm(&Param);
+			m_Layers[i].LeftSample=Param.FirstLeftSample;
+			m_Layers[i].LeftIndex=Param.FirstLeftIndex;
+			m_Layers[i].RightSample=Param.FirstRightSample;
+			m_Layers[i].RightIndex=Param.FirstRightIndex;
 			OutputSize=AudioSize*2;
 		}
 		else
@@ -336,6 +336,17 @@ unsigned long CInterleavedStream::GetSampleRate() const
 
 unsigned char CInterleavedStream::GetChannels() const
 {
+	switch(m_SubType)
+	{
+		case ST_PCM:
+		return 2;
+		case ST_ADPCM_MONO:
+		return 1;
+		case ST_ADPCM_STEREO:
+		return 2;
+		default:
+		break;
+	}
 	return 2;
 }
 

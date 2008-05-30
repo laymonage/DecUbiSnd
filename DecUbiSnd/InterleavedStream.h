@@ -24,7 +24,8 @@ public:
 	enum ESubType
 	{
 		ST_UNKNOWN=0,
-		ST_ADPCM=11,
+		ST_ADPCM_MONO=4,
+		ST_ADPCM_STEREO=11,
 		ST_PCM=16
 	};
 
