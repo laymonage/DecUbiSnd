@@ -4,4 +4,4 @@
 #pragma once
 
 // List the UbiSoft format audio chunks in the file
-bool ScanAndList(std::istream& Input, size_t EndOffset);
+bool ScanAndList(std::istream& Input, std::streamoff EndOffset);
