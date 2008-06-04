@@ -2,9 +2,13 @@
 //
 
 #include "stdafx.h"
+#include "DataExceptions.h"
+#include "AudioExceptions.h"
+#include "FileDataStream.h"
 #include "Version5Stream.h"
 #include "InterleavedStream.h"
 #include "OldInterleavedStream.h"
+#include "OggVorbisStream.h"
 #include "Scan.h"
 #include "SegmentParser.h"
 #include "WaveWriter.h"
@@ -257,19 +261,35 @@ int Decode(SArguments& Args)
 			Input.get();
 		}
 
+		// Set up an input stream
+		CFileDataStream FileStream(&Input, Segment.GetOffset(), Segment.GetSize());
+
 		// Decompress the audio
 		if(InputType==3 || InputType==5)
 		{
 			// Decode the stream
-			CVersion5Stream Stream(Input, Segment.GetOffset(), Segment.GetSize());
-			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			CVersion5Stream Stream(&FileStream);
+			try
 			{
-				std::cerr << "Problems initializing the header." << std::endl;
-				continue;
+				if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+				{
+					std::cerr << "Problems initializing the header." << std::endl;
+					continue;
+				}
+				if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+				{
+					std::cerr << "Problems decompressing the input file." << std::endl;
+				}
 			}
-			if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+			catch(XDataException& e)
 			{
-				std::cerr << "Problems decompressing the input file." << std::endl;
+				std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
+				std::cerr << e.GetMessage() << std::endl;
+			}
+			catch(XAudioException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
 			}
 
 			// Set the information
@@ -281,16 +301,29 @@ int Decode(SArguments& Args)
 		else if(InputType==8)
 		{
 			// Decode the stream
-			CInterleavedStream Stream(Input, Segment.GetOffset(), Segment.GetSize());
-			Stream.SetParam("Layer", Args.InputLayer);
-			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			CInterleavedStream Stream(&FileStream);
+			try
 			{
-				std::cerr << "Problems initializing the header." << std::endl;
-				continue;
+				Stream.SetParam("Layer", Args.InputLayer);
+				if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+				{
+					std::cerr << "Problems initializing the header." << std::endl;
+					continue;
+				}
+				if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+				{
+					std::cerr << "Problems decompressing the input file." << std::endl;
+				}
 			}
-			if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+			catch(XDataException& e)
 			{
-				std::cerr << "Problems decompressing the input file." << std::endl;
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
+			}
+			catch(XAudioException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
 			}
 
 			// Set the information
@@ -302,16 +335,62 @@ int Decode(SArguments& Args)
 		else if(InputType==2)
 		{
 			// Decode the stream
-			COldInterleavedStream Stream(Input, Segment.GetOffset(), Segment.GetSize());
-			Stream.SetParam("Layer", Args.InputLayer);
-			if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+			COldInterleavedStream Stream(&FileStream);
+			try
 			{
-				std::cerr << "Problems initializing the header." << std::endl;
-				continue;
+				Stream.SetParam("Layer", Args.InputLayer);
+				if(!Stream.InitializeHeader(Args.InputStereo ? 2 : 1, Args.InputTypeForce))
+				{
+					std::cerr << "Problems initializing the header." << std::endl;
+					continue;
+				}
+				if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+				{
+					std::cerr << "Problems decompressing the input file." << std::endl;
+				}
 			}
-			if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+			catch(XDataException& e)
 			{
-				std::cerr << "Problems decompressing the input file." << std::endl;
+				std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
+				std::cerr << e.GetMessage() << std::endl;
+			}
+			catch(XAudioException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
+			}
+
+			// Set the information
+			SampleRate=Stream.GetSampleRate();
+			BitsPerSample=16;
+			Channels=Stream.GetChannels();
+			NumberSamples+=LocalNumberSamples;
+		}
+		else if(InputType==79)
+		{
+			// Decode the stream
+			COggVorbisStream Stream(&FileStream);
+			try
+			{
+				if(!Stream.InitializeHeader())
+				{
+					std::cerr << "Problems initializing the header." << std::endl;
+					continue;
+				}
+				if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+				{
+					std::cerr << "Problems decompressing the input file." << std::endl;
+				}
+			}
+			catch(XDataException& e)
+			{
+				std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
+				std::cerr << e.GetMessage() << std::endl;
+			}
+			catch(XAudioException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
 			}
 
 			// Set the information
@@ -347,9 +426,6 @@ int Decode(SArguments& Args)
 
 int Scan(SArguments& Args)
 {
-	// Print a warning message
-	std::cerr << "Warning: The scan feature is experimental. Use it at your own risk." << std::endl;
-
 	// Check the arguments
 	if(Args.InputFilename=="")
 	{
@@ -419,7 +495,6 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  -l, --layer Number    Specify the layer number (starts at 0)" << std::endl;
 		std::cout << "  -g, --segments File   Use a segment definition file" << std::endl;
 		std::cout << std::endl;
-		//std::cout << "  --header-size Number  Specify the header size" << std::endl;
 		std::cout << "  --input-type Type     Force it to use the decoder for Type (3, 5, or 8)?" << std::endl;
 		std::cout << "  --sample-rate Rate    Force a specific sampling rate" << std::endl;
 		std::cout << std::endl;

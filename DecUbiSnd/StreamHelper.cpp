@@ -3,30 +3,14 @@
 
 #include "stdafx.h"
 #include "StreamHelper.h"
+#include "DataStream.h"
 
-CStreamHelper::CStreamHelper(std::istream& Input, std::streamsize Size) :
-	CAudioStream(Input, Size),
-	m_InputBuffer(NULL),
+CStreamHelper::CStreamHelper(CDataStream* Input) :
+	CAudioStream(Input),
+	m_Initialized(false),
 	m_OutputBuffer(NULL),
-	m_InputBufferLength(0),
 	m_OutputBufferLength(0),
-	m_InputBufferOffset(0),
 	m_OutputBufferOffset(0),
-	m_InputBufferUsed(0),
-	m_OutputBufferUsed(0)
-{
-	return;
-}
-
-CStreamHelper::CStreamHelper(std::istream& Input, std::streamoff Offset, std::streamsize Size) :
-	CAudioStream(Input, Offset, Size),
-	m_InputBuffer(NULL),
-	m_OutputBuffer(NULL),
-	m_InputBufferLength(0),
-	m_OutputBufferLength(0),
-	m_InputBufferOffset(0),
-	m_OutputBufferOffset(0),
-	m_InputBufferUsed(0),
 	m_OutputBufferUsed(0)
 {
 	return;
@@ -34,35 +18,8 @@ CStreamHelper::CStreamHelper(std::istream& Input, std::streamoff Offset, std::st
 
 CStreamHelper::~CStreamHelper()
 {
-	// This frees the buffers
-	PrepareInputBuffer(0);
+	// This frees the buffer
 	PrepareOutputBuffer(0);
-	return;
-}
-
-void CStreamHelper::PrepareInputBuffer(unsigned long InputBufferLength)
-{
-	// Check the input buffer
-	if(!m_InputBuffer || m_InputBufferLength<InputBufferLength)
-	{
-		// Free the old one
-		if(m_InputBuffer)
-		{
-			delete[] m_InputBuffer;
-			m_InputBuffer=NULL;
-			m_InputBufferLength=0;
-		}
-
-		// Allocate the new one
-		if(InputBufferLength)
-		{
-			m_InputBuffer=new unsigned char[InputBufferLength];
-			m_InputBufferLength=InputBufferLength;
-		}
-
-		m_InputBufferUsed=0;
-		m_InputBufferOffset=m_InputBufferUsed;
-	}
 	return;
 }
 
@@ -92,78 +49,12 @@ void CStreamHelper::PrepareOutputBuffer(unsigned long OutputBufferLength)
 	return;
 }
 
-bool CStreamHelper::FillInputBuffer(unsigned long NumberBytes)
+bool CStreamHelper::IsInitialized() const
 {
-	// Check to see if the buffer can hold all of it
-	if(NumberBytes>m_InputBufferLength)
-	{
-		return false;
-	}
-
-	// Reset the data in there already
-	if(m_InputBufferUsed)
-	{
-		if(m_InputBufferOffset==m_InputBufferUsed)
-		{
-			m_InputBufferOffset=0;
-			m_InputBufferUsed=0;
-		}
-		else if(m_InputBufferOffset>m_InputBufferUsed)
-		{
-			// Error!
-		}
-		else if(m_InputBufferOffset>0)
-		{
-			for(unsigned long i=0;i<m_InputBufferUsed-m_InputBufferOffset;i++)
-			{
-				m_InputBuffer[i]=m_InputBuffer[i+m_InputBufferOffset];
-			}
-			m_InputBufferUsed=m_InputBufferUsed-m_InputBufferOffset;
-			m_InputBufferOffset=0;
-		}
-	}
-	else
-	{
-		m_InputBufferOffset=0;
-	}
-
-	// Add more data if there is not enough already
-	if(m_InputBufferUsed<NumberBytes)
-	{
-		// Calculate the number of bytes to read
-		unsigned long BytesLeft=m_EndOffset-m_Input.tellg();
-		unsigned long BytesToRead=NumberBytes-m_InputBufferUsed;
-		if(BytesLeft<BytesToRead)
-		{
-			BytesToRead=BytesLeft;
-		}
-
-		// Read the buffer and update the variables
-		m_Input.read((char*)(m_InputBuffer+m_InputBufferUsed), BytesToRead);
-		m_InputBufferUsed+=BytesToRead;
-	}
-	return true;
+	return m_Initialized;
 }
 
-unsigned long CStreamHelper::GetInputBytesLeft(unsigned long MaxNumberBytes)
-{
-	// Check if we went past the end
-	if(m_EndOffset<m_Input.tellg())
-	{
-		return 0;
-	}
-
-	// Calculate the number of bytes to read
-	unsigned long BytesLeft=m_EndOffset-m_Input.tellg();
-	unsigned long BytesToRead=MaxNumberBytes;
-	if(MaxNumberBytes!=0xFFFFFFFF && BytesLeft>MaxNumberBytes)
-	{
-		BytesLeft=MaxNumberBytes;
-	}
-	return BytesLeft;
-}
-
-bool CStreamHelper::Decode(short* Buffer, unsigned long& NumberSamples, unsigned long MaxInputBytes)
+bool CStreamHelper::Decode(short* Buffer, unsigned long& NumberSamples)
 {
 	// Check arguments
 	if(!Buffer)
@@ -179,30 +70,20 @@ bool CStreamHelper::Decode(short* Buffer, unsigned long& NumberSamples, unsigned
 		return false;
 	}
 
-	// Check to make sure the file offset is sane
-	if((std::streamoff)m_Input.tellg()==-1)
-	{
-		NumberSamples=0;
-		return true;
-	}
-	else if(m_Input.tellg()<m_BeginOffset)
+	// Check to see if we are at the end of the stream
+	if(!m_InputStream)
 	{
 		return false;
 	}
-	else if(m_Input.tellg()>m_EndOffset)
+	if(m_InputStream->IsEnd())
 	{
 		NumberSamples=0;
 		return true;
 	}
 
 	// Some variables
-	unsigned long SamplesLeft=NumberSamples;
 	unsigned long BufferPos=0;
-	unsigned long InputBytesLeft=m_EndOffset-m_Input.tellg();
-	if(MaxInputBytes!=0xFFFFFFFF && InputBytesLeft>MaxInputBytes)
-	{
-		InputBytesLeft=MaxInputBytes;
-	}
+	unsigned long SamplesLeft=NumberSamples;
 
 	while(true)
 	{
@@ -236,17 +117,18 @@ bool CStreamHelper::Decode(short* Buffer, unsigned long& NumberSamples, unsigned
 		m_OutputBufferUsed=0;
 		m_OutputBufferOffset=0;
 
-		// Decode some data into the buffer
-		std::streamoff PrevOffset=m_Input.tellg();
-		if(!DoDecodeBlock(InputBytesLeft))
+		// Check if it's the end of the stream
+		if(m_InputStream->IsEnd())
 		{
-			PrepareInputBuffer(0);
+			break;
+		}
+
+		// Decode some data into the buffer
+		if(!DoDecodeBlock())
+		{
 			PrepareOutputBuffer(0);
 			return false;
 		}
-
-		// Figure out how much input is left
-		InputBytesLeft-=m_Input.tellg()-PrevOffset;
 
 		// Exit if at the end of the stream
 		if(m_OutputBufferUsed<1)

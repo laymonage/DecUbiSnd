@@ -4,24 +4,12 @@
 #include "stdafx.h"
 #include "Version5Stream.h"
 #include "Adpcm.h"
+#include "DataStream.h"
 
 #define SwapWord(_Word) ((((unsigned short)(_Word)&0xFF00)>>8) | (((unsigned short)(_Word)&0x00FF)<<8))
 
-CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamsize Size) :
-	CStreamHelper(Input, Size),
-	m_Type(5),
-	m_NumberExtraSamples(0),
-	m_Stereo(true),
-	m_LeftSample(0),
-	m_LeftIndex(0),
-	m_RightSample(0),
-	m_RightIndex(0)
-{
-	return;
-}
-
-CVersion5Stream::CVersion5Stream(std::istream& Input, std::streamoff Offset, std::streamsize Size) :
-	CStreamHelper(Input, Offset, Size),
+CVersion5Stream::CVersion5Stream(CDataStream* Input) :
+	CStreamHelper(Input),
 	m_Type(5),
 	m_NumberExtraSamples(0),
 	m_Stereo(true),
@@ -55,15 +43,12 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 		return false;
 	}
 
-	// Check the input
-	if((m_EndOffset-m_BeginOffset)<100)
-	{
-		return false;
-	}
-
 	// Read the type from the file
-	m_Input.seekg(m_BeginOffset);
-	m_Type=m_Input.get();
+	if(m_InputStream->CanSeekBackward())
+	{
+		m_InputStream->SeekToBeginning();
+	}
+	m_InputStream->ExactRead(&m_Type, 1);
 	if(Force)
 	{
 		m_Type=Force;
@@ -77,14 +62,14 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 	}
 
 	// Read the rest of the first header
-	m_Input.seekg(13, std::ios_base::cur);
-	m_Input.read((char*)&m_NumberExtraSamples, 2);
-	m_Input.read((char*)&m_LeftSample, 2);
-	m_Input.read((char*)&m_LeftIndex, 1);
-	m_Input.seekg(1, std::ios_base::cur);
-	m_Input.read((char*)&m_RightSample, 2);
-	m_Input.read((char*)&m_RightIndex, 1);
-	m_Input.seekg(5, std::ios_base::cur);
+	m_InputStream->ExactIgnore(13);
+	m_InputStream->ExactRead(&m_NumberExtraSamples, 2);
+	m_InputStream->ExactRead(&m_LeftSample, 2);
+	m_InputStream->ExactRead(&m_LeftIndex, 1);
+	m_InputStream->ExactIgnore(1);
+	m_InputStream->ExactRead(&m_RightSample, 2);
+	m_InputStream->ExactRead(&m_RightIndex, 1);
+	m_InputStream->ExactIgnore(5);
 
 	// Theses are big-endian for some reason
 	if(m_Type==3)
@@ -122,26 +107,27 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 	return true;
 }
 
-bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
+bool CVersion5Stream::DoDecodeBlock()
 {
 	// Process the uncompressed samples
 	if(m_NumberExtraSamples)
 	{
 		// Prepare the buffers
-		PrepareInputBuffer(m_NumberExtraSamples*2);
+		unsigned char* Buffer;
+		unsigned long BufferLength=m_NumberExtraSamples*2;
 		PrepareOutputBuffer(m_NumberExtraSamples);
-		FillInputBuffer(min(m_InputBufferLength,  MaxInputBytes));
+		Buffer=(unsigned char*)m_InputStream->ExactRead(BufferLength);
 
 		// Process the bytes
-		for(;m_InputBufferOffset<m_InputBufferUsed;m_InputBufferOffset+=2)
+		for(unsigned long i=0;i<BufferLength;i+=2)
 		{
 			if(m_Type==3)
 			{
-				m_OutputBuffer[m_OutputBufferUsed]=SwapWord(m_InputBuffer[m_InputBufferOffset]);
+				m_OutputBuffer[m_OutputBufferUsed]=SwapWord(Buffer[i]);
 			}
 			else
 			{
-				m_OutputBuffer[m_OutputBufferUsed]=m_InputBuffer[m_InputBufferOffset];
+				m_OutputBuffer[m_OutputBufferUsed]=Buffer[i];
 			}
 			m_OutputBufferUsed++;
 			m_NumberExtraSamples--;
@@ -150,12 +136,13 @@ bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
 	}
 
 	// Prepare the buffers
-	PrepareInputBuffer(RecommendBufferLength()/2);
+	unsigned char* Buffer;
+	unsigned long BufferLength=RecommendBufferLength()/2;
 	PrepareOutputBuffer(RecommendBufferLength());
-	FillInputBuffer(min(m_InputBufferLength,  MaxInputBytes));
+	Buffer=(unsigned char*)m_InputStream->Read(BufferLength);
 
 	// Calculate how many samples are needed
-	m_OutputBufferUsed=m_InputBufferUsed*2;
+	m_OutputBufferUsed=BufferLength*2;
 	if(m_OutputBufferUsed<1)
 	{
 		return true;
@@ -165,8 +152,8 @@ bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
 	if(!m_Stereo)
 	{
 		SAdpcmMonoParam Param;
-		Param.InputBuffer=m_InputBuffer;
-		Param.InputLength=m_InputBufferUsed;
+		Param.InputBuffer=Buffer;
+		Param.InputLength=BufferLength;
 		Param.OutputBuffer=m_OutputBuffer;
 		Param.FirstSample=m_LeftSample;
 		Param.FirstIndex=m_LeftIndex;
@@ -179,8 +166,8 @@ bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
 	else
 	{
 		SAdpcmStereoParam Param;
-		Param.InputBuffer=m_InputBuffer;
-		Param.InputLength=m_InputBufferUsed;
+		Param.InputBuffer=Buffer;
+		Param.InputLength=BufferLength;
 		Param.OutputBuffer=m_OutputBuffer;
 		Param.FirstLeftSample=m_LeftSample;
 		Param.FirstLeftIndex=m_LeftIndex;
@@ -192,9 +179,6 @@ bool CVersion5Stream::DoDecodeBlock(unsigned long MaxInputBytes)
 		m_RightSample=Param.FirstRightSample;
 		m_RightIndex=Param.FirstRightIndex;
 	}
-
-	// All of the input buffer was used
-	m_InputBufferOffset=m_InputBufferUsed;
 	return true;
 }
 
