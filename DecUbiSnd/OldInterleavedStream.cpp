@@ -4,41 +4,36 @@
 #include "stdafx.h"
 #include "OldInterleavedStream.h"
 #include "Version5Stream.h"
+#include "BufferDataStream.h"
+#include "DataExceptions.h"
+#include "AudioExceptions.h"
 
+// Information associated with each layer
 struct COldInterleavedStream::SOldInterleavedLayer
 {
-	SOldInterleavedLayer() : Stream(NULL) {};
-	CVersion5Stream* Stream;
-	std::streamoff NextOffset;
+	SOldInterleavedLayer() : Stream(NULL), Data(NULL) {};
+	~SOldInterleavedLayer() { delete Stream; delete Data; }
 
-	unsigned long BlockSize;
+	CVersion5Stream* Stream;
+	CBufferDataStream* Data;
 	bool First;
 };
 
-COldInterleavedStream::COldInterleavedStream(std::istream& Input, std::streamsize Size) :
-	CStreamHelper(Input, Size),
+COldInterleavedStream::COldInterleavedStream(CDataStream* Input) :
+	CStreamHelper(Input),
 	m_Layer(0),
-	m_BlockNumber(0)
+	m_BlockNumber(0),
+	m_TotalBytes(0),
+	m_SampleRate(36000),
+	m_Stereo(true)
 {
 	DoRegisterParams();
-	m_Layers=new std::vector<SOldInterleavedLayer>;
-	return;
-}
-
-COldInterleavedStream::COldInterleavedStream(std::istream& Input, std::streamoff Offset, std::streamsize Size) :
-	CStreamHelper(Input, Offset, Size),
-	m_Layer(0),
-	m_BlockNumber(0)
-{
-	DoRegisterParams();
-	m_Layers=new std::vector<SOldInterleavedLayer>;
 	return;
 }
 
 COldInterleavedStream::~COldInterleavedStream()
 {
 	ClearLayers();
-	delete m_Layers;
 	return;
 }
 
@@ -65,52 +60,58 @@ bool COldInterleavedStream::InitializeHeader()
 bool COldInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char Force)
 {
 	// Check the parameters
-	if(Channels<0 || Channels>2)
+	if(Channels<1 || Channels>2)
 	{
-		return false;
+		throw(XUserException("The number of channels must 1 or 2"));
 	}
 	if(!(Force==0 || Force==2))
 	{
-		return false;
-	}
-
-	// Check the input
-	if((m_EndOffset-m_BeginOffset)<100)
-	{
-		return false;
+		throw(XUserException("Cannot force a file to be invalid (must be 0 or 2)"));
 	}
 
 	// Clear previous data
 	ClearLayers();
 
+	// Set the stereo flag
+	if(Channels==1)
+	{
+		m_Stereo=false;
+	}
+	else if(Channels==2)
+	{
+		m_Stereo=true;
+	}
+
 	// Read the type from the file
-	m_Input.seekg(m_BeginOffset);
-	m_Input.read((char*)&m_Type, 2);
+	unsigned short Type;
+	if(m_InputStream->CanSeekBackward())
+	{
+		m_InputStream->SeekToBeginning();
+	}
+	m_InputStream->ExactRead(&Type, 2);
 	if(Force)
 	{
-		m_Type=Force;
+		Type=Force;
 	}
 	else
 	{
-		if(m_Type!=2)
+		if(Type!=2)
 		{
-			return false;
+			throw(XFileException("File does not have the correct signature (should be 02)"));
 		}
 	}
 
 	// Read the header
 	unsigned long NumberLayers;
 	unsigned long TotalSize;
-	m_Input.seekg(2, std::ios_base::cur);
-	m_Input.read((char*)&NumberLayers, 4);
-	m_Input.read((char*)&TotalSize, 4);
-	m_Input.seekg(12, std::ios_base::cur);
+	m_InputStream->ExactIgnore(2);
+	m_InputStream->ExactRead(&NumberLayers, 4);
+	m_InputStream->ExactRead(&TotalSize, 4);
+	m_InputStream->ExactIgnore(12);
 
-	// Change the end of the stream, if necessary
-	if((std::streamoff)TotalSize<m_EndOffset && (std::streamoff)TotalSize+m_BeginOffset<m_EndOffset)
-	{
-		m_EndOffset=TotalSize+m_BeginOffset;
-	}
+	// Set the total number of bytes
+	m_TotalBytes=TotalSize;
+	m_BlockNumber=1;
 
 	// A check
 	if(NumberLayers!=3)
@@ -118,165 +119,185 @@ bool COldInterleavedStream::InitializeHeader(unsigned char Channels, unsigned ch
 		std::cerr << "Information: " << NumberLayers << " layers" << std::endl;
 	}
 
-	// Process the first block header
-	std::streamoff FirstBlock=m_Input.tellg();
-	std::streamoff NextData=FirstBlock+8+NumberLayers*4;
-	unsigned long BlockID;
-	m_Input.read((char*)&BlockID, 4);
-	if(BlockID!=1)
-	{
-		std::cerr << "Error: Invalid block ID" << std::endl;
-		return false;
-	}
-	m_BlockNumber=1;
-	m_Input.seekg(4, std::ios_base::cur);
-
 	// Create the layers
 	for(unsigned long i=0;i<NumberLayers;i++)
 	{
-		// Read the block size
-		unsigned long BlockSize;
-		m_Input.read((char*)&BlockSize, 4);
-
-		// Add a new layer
-		SOldInterleavedLayer NewLayer;
-		m_Layers->push_back(NewLayer);
-		SOldInterleavedLayer& Layer=(*m_Layers)[i];
+		// Create the layer
+		SOldInterleavedLayer* Layer=new SOldInterleavedLayer;
 
 		// Create a new stream for the layer
-		std::streamoff PrevOffset=m_Input.tellg();
-		Layer.Stream=new CVersion5Stream(m_Input, NextData, m_EndOffset-NextData);
-		Layer.First=true;
-		NextData+=BlockSize;
+		Layer->Data=new CBufferDataStream();
+		Layer->Stream=new CVersion5Stream(Layer->Data);
+		Layer->First=true;
 
-		// Initialize the header
-		if(!Layer.Stream->InitializeHeader(Channels))
-		{
-			ClearLayers();
-			return false;
-		}
-		m_Input.seekg(PrevOffset);
+		// Push it on
+		m_Layers.push_back(Layer);
 	}
-	m_Input.seekg(FirstBlock);
-	return true;
-}
 
-bool COldInterleavedStream::DoDecodeBlock(unsigned long MaxInputBytes)
-{
-	//__asm int 3;
-	// Check the state
-	if(m_Layer<0 || m_Layer>=m_Layers->size())
+	// Read the first block
+	if(!DoReadBlock())
 	{
+		ClearLayers();
 		return false;
 	}
 
-	// Is there any left?
-	if(!GetInputBytesLeft(MaxInputBytes))
+	// Initialize the layers
+	for(unsigned long i=0;i<m_Layers.size();i++)
+	{
+		// Get the layer
+		SOldInterleavedLayer& Layer=*m_Layers[i];
+
+		try
+		{
+			// Initialize the header
+			if(!Layer.Stream->InitializeHeader(m_Stereo ? 2 : 1))
+			{
+				ClearLayers();
+				return false;
+			}
+		}
+		catch(XNeedBuffer&)
+		{
+			ClearLayers();
+			throw(XFileException("The decoder needed more information than the header provided"));
+		}
+	}
+	return true;
+}
+
+bool COldInterleavedStream::DoDecodeBlock()
+{
+	// Check the state
+	if(m_Layer<0 || m_Layer>=m_Layers.size())
+	{
+		throw(XUserException("The layer number is not valid"));
+	}
+
+	// Read a block
+	if(!DoReadBlock())
 	{
 		return true;
 	}
 
-	// Process the block header
+	// Go through each of the layers, decoding it
+	for(unsigned long i=0;i<m_Layers.size();i++)
+	{
+		// Get the layer
+		SOldInterleavedLayer& Layer=*m_Layers[i];
+
+		// If this is not the layer just continue
+		if(i!=m_Layer)
+		{
+			Layer.Data->ResetBuffer();
+			continue;
+		}
+
+		// Prepare the output
+		unsigned long RequestAmount=Layer.Data->GetBufferedLength()*2;
+		PrepareOutputBuffer(RequestAmount);
+
+		// HACK: I should find a better way of decoding only what is needed
+		Layer.Data->EndStream();
+
+		// Decode
+		try
+		{
+			m_OutputBufferUsed=RequestAmount;
+			if(!Layer.Stream->Decode(m_OutputBuffer, m_OutputBufferUsed))
+			{
+				return false;
+			}
+		}
+		catch(XNeedBuffer&)
+		{
+			return DoDecodeBlock();
+		}
+	}
+	return true;
+}
+
+bool COldInterleavedStream::DoReadBlock()
+{
+	// Check for the end of the file
+	if(m_InputStream->IsEnd() || m_InputStream->Tell()>=m_TotalBytes)
+	{
+		// Mark the end of the stream for all of the layers
+		for(unsigned long i=0;i<m_Layers.size();i++)
+		{
+			SOldInterleavedLayer& Layer=*m_Layers[i];
+			Layer.Data->EndStream();
+		}
+		return false;
+	}
+
+	// Process the first block header
 	unsigned long BlockID;
-	m_Input.read((char*)&BlockID, 4);
+	m_InputStream->ExactRead(&BlockID, 4);
 	if(BlockID!=m_BlockNumber)
 	{
-		std::cerr << "Error: Invalid block ID" << std::endl;
-		return false;
+		throw(XFileException("Error: Invalid block ID"));
 	}
 	m_BlockNumber++;
-	m_Input.seekg(4, std::ios_base::cur);
+	m_InputStream->ExactIgnore(4);
 
-	// Read the layer sizes, only keeping what we need
-	unsigned long BlockBeginSkip=0;
-	unsigned long BlockEndSkip=0;
-	unsigned long CurrentBlockSize=0;
-	for(unsigned long i=0;i<m_Layers->size();i++)
+	// Read in the block sizes
+	std::vector<unsigned long> BlockSizes;
+	for(unsigned long i=0;i<m_Layers.size();i++)
 	{
 		unsigned long BlockSize;
-		m_Input.read((char*)&BlockSize, 4);
-		if(i<m_Layer)
-		{
-			BlockBeginSkip+=BlockSize;
-		}
-		else if(i>m_Layer)
-		{
-			BlockEndSkip+=BlockSize;
-		}
-		else if(i==m_Layer)
-		{
-			CurrentBlockSize=BlockSize;
-		}
-
-		if(m_Layer!=i && (*m_Layers)[i].First)
-		{
-			(*m_Layers)[i].First=false;
-		}
+		m_InputStream->ExactRead(&BlockSize, 4);
+		BlockSizes.push_back(BlockSize);
 	}
 
-	// Do the skip
-	m_Input.seekg(BlockBeginSkip, std::ios_base::cur);
-
-	// Set things up
-	SOldInterleavedLayer& Layer=(*m_Layers)[m_Layer];
-	if(Layer.First)
+	// Go through each of the layers
+	for(unsigned long i=0;i<m_Layers.size();i++)
 	{
-		m_Input.seekg(28, std::ios_base::cur);
-		CurrentBlockSize-=28;
+		// Get a reference to the layer
+		SOldInterleavedLayer& Layer=*m_Layers[i];
 		Layer.First=false;
-	}
 
-	// Decode a block
-	PrepareOutputBuffer(CurrentBlockSize*2);
-	m_OutputBufferUsed=CurrentBlockSize*2;
-	if(!Layer.Stream->Decode(m_OutputBuffer, m_OutputBufferUsed, CurrentBlockSize))
-	{
-		return false;
+		// Feed it a block
+		void* Buffer;
+		Buffer=m_InputStream->ExactRead(BlockSizes[i]);
+		Layer.Data->SendBuffer(Buffer, BlockSizes[i]);
 	}
-
-	// Do the skip
-	m_Input.seekg(BlockEndSkip, std::ios_base::cur);
 	return true;
+}
+
+void COldInterleavedStream::SetSampleRate(unsigned long SampleRate)
+{
+	m_SampleRate=SampleRate;
+	return;
 }
 
 unsigned long COldInterleavedStream::GetSampleRate() const
 {
-	// Check each possible type
-	if(m_Type==2)
-	{
-		return 36000;
-	}
-	return 22050;
+	return m_SampleRate;
 }
 
 unsigned char COldInterleavedStream::GetChannels() const
 {
-	return 2;
+	return m_Stereo ? 2 : 1;
 }
 
 std::string COldInterleavedStream::GetFormatName() const
 {
-	// Check each possible type
-	if(m_Type==2)
-	{
-		return "ubiinterl2";
-	}
-	return "unknown";
+	return "ubiinterl2";
 }
 
 void COldInterleavedStream::DoRegisterParams()
 {
 	RegisterParam("Layer", (TSetLongParamProc)SetLayer, NULL, (TGetLongParamProc)GetLayer, NULL);
+	//RegisterParam("SampleRate", (TSetLongParamProc)SetSampleRate, NULL, (TGetLongParamProc)GetSampleRate, NULL);
 	return;
 }
 
 void COldInterleavedStream::ClearLayers()
 {
-	for(std::vector<SOldInterleavedLayer>::iterator Iter=m_Layers->begin();Iter!=m_Layers->end();++Iter)
+	for(std::vector<SOldInterleavedLayer*>::iterator Iter=m_Layers.begin();Iter!=m_Layers.end();++Iter)
 	{
-		delete Iter->Stream;
-		Iter->Stream=NULL;
+		delete *Iter;
 	}
-	m_Layers->clear();
+	m_Layers.clear();
 	return;
 }

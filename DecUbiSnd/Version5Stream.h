@@ -17,11 +17,10 @@ protected:
 	unsigned char m_RightIndex;
 
 protected:
-	virtual bool DoDecodeBlock(unsigned long MaxInputBytes);
+	virtual bool DoDecodeBlock();
 
 public:
-	CVersion5Stream(std::istream& Input, std::streamsize Size);
-	CVersion5Stream(std::istream& Input, std::streamoff Offset, std::streamsize Size);
+	CVersion5Stream(CDataStream* Input);
 	virtual ~CVersion5Stream();
 
 	virtual bool InitializeHeader();

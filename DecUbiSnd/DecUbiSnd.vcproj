@@ -31,6 +31,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ogg_static_d.lib vorbis_static_d.lib vorbisfile_static_d.lib"
 				OutputFile="$(OutDir)/DecUbiSnd.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="TRUE"
@@ -76,6 +77,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ogg_static.lib vorbis_static.lib vorbisfile_static.lib"
 				OutputFile="$(OutDir)/DecUbiSnd.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="TRUE"
@@ -116,13 +118,31 @@
 				RelativePath=".\ADPCM.cpp">
 			</File>
 			<File
+				RelativePath=".\AudioExceptions.cpp">
+			</File>
+			<File
 				RelativePath=".\AudioStream.cpp">
+			</File>
+			<File
+				RelativePath=".\BufferDataStream.cpp">
+			</File>
+			<File
+				RelativePath=".\DataExceptions.cpp">
+			</File>
+			<File
+				RelativePath=".\DataStream.cpp">
+			</File>
+			<File
+				RelativePath=".\FileDataStream.cpp">
 			</File>
 			<File
 				RelativePath=".\InterleavedStream.cpp">
 			</File>
 			<File
 				RelativePath=".\Main.cpp">
+			</File>
+			<File
+				RelativePath=".\OggVorbisStream.cpp">
 			</File>
 			<File
 				RelativePath=".\OldInterleavedStream.cpp">
@@ -169,10 +189,28 @@
 				RelativePath=".\ADPCM.h">
 			</File>
 			<File
+				RelativePath=".\AudioExceptions.h">
+			</File>
+			<File
 				RelativePath=".\AudioStream.h">
 			</File>
 			<File
+				RelativePath=".\BufferDataStream.h">
+			</File>
+			<File
+				RelativePath=".\DataExceptions.h">
+			</File>
+			<File
+				RelativePath=".\DataStream.h">
+			</File>
+			<File
+				RelativePath=".\FileDataStream.h">
+			</File>
+			<File
 				RelativePath=".\InterleavedStream.h">
+			</File>
+			<File
+				RelativePath=".\OggVorbisStream.h">
 			</File>
 			<File
 				RelativePath=".\OldInterleavedStream.h">
