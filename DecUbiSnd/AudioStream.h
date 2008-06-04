@@ -6,6 +6,8 @@
 #define min(a, b) ((a)<(b) ? (a) : (b))
 #endif
 
+class CDataStream;
+
 // Provides audio stream decoding
 class CAudioStream
 {
@@ -17,22 +19,23 @@ protected:
 	typedef std::string (CAudioStream::*TGetStringParamProc)() const;
 
 protected:
-	std::istream& m_Input;
-	std::streamoff m_BeginOffset;
-	std::streamoff m_EndOffset;
+	CDataStream* m_InputStream;
 	std::map<std::string, SParamDef>* m_Params;
 
 protected:
 	virtual void RegisterParam(std::string Name, TSetLongParamProc SetLong, TSetStringParamProc SetString, TGetLongParamProc GetLong, TGetStringParamProc GetString);
 
 public:
-	CAudioStream(std::istream& Input, std::streamsize Size);
-	CAudioStream(std::istream& Input, std::streamoff Offset, std::streamsize Size);
+	CAudioStream(CDataStream* Input);
 	virtual ~CAudioStream();
+
+	virtual void SetInputStream(CDataStream* Input);
+	virtual CDataStream* GetInputStream() const;
 
 	virtual unsigned long RecommendBufferLength() const;
 	virtual bool InitializeHeader()=0;
-	virtual bool Decode(short* Buffer, unsigned long& NumberSamples, unsigned long MaxInputBytes=0xFFFFFFFF)=0;
+	virtual bool IsInitialized() const=0;
+	virtual bool Decode(short* Buffer, unsigned long& NumberSamples)=0;
 	virtual bool DecodeToFile(std::ostream& Output, unsigned long& NumberSamples);
 	virtual unsigned long GetSampleRate() const=0;
 	virtual unsigned char GetChannels() const=0;

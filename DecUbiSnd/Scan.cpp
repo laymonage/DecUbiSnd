@@ -4,6 +4,66 @@
 #include "stdafx.h"
 #include "Scan.h"
 
+// Check an Ogg chunk
+static bool CheckOggChunk(std::istream& Input, std::streamsize& FullSize)
+{
+	// Some assumptions
+	unsigned char Char[4];
+
+	// Read in the characters
+	Input.read((char*)Char, 4);
+	Input.seekg(-4, std::ios_base::cur);
+
+	// Check them
+	if(memcmp(Char, "OggS", 4)!=0)
+	{
+		return false;
+	}
+
+	// Walk the chain
+	bool First=true;
+	unsigned char Header[27];
+	FullSize=0;
+	while(true)
+	{
+		unsigned char* Segments=0;
+		unsigned long HeaderSize=0;
+		unsigned long PageSize=0;
+
+		Input.read((char*)Header, 27);
+		HeaderSize=27+Header[26];
+		Segments=new unsigned char[Header[26]];
+		Input.read((char*)Segments, Header[26]);
+		for(unsigned long i=0;i<Header[26];i++)
+		{
+			PageSize+=Segments[i];
+		}
+		PageSize+=HeaderSize;
+		FullSize+=PageSize;
+		if(First)
+		{
+			if(Header[5]&0x02)
+			{
+				First=false;
+			}
+			else
+			{
+				// We found the middle of the stream
+				delete[] Segments;
+				return false;
+			}
+		}
+		if(Header[5]&0x04)
+		{
+			delete[] Segments;
+			break;
+		}
+		Input.seekg(PageSize-HeaderSize, std::ios_base::cur);
+		delete[] Segments;
+	}
+	return true;
+}
+
 // Do the actual scanning, to figure out roughly when the next audio is
 static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsize& BytesRead, std::streamsize& FullSize)
 {
@@ -167,6 +227,10 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				{
 					ChunkValid=false;
 				}
+				if(NumberLayers==0)
+				{
+					ChunkValid=false;
+				}
 
 				// Walk the blocks
 				if(ChunkValid)
@@ -203,6 +267,25 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 
 				// If the chunk is valid
 				if(ChunkValid)
+				{
+					// The file is valid so far, so return success
+					Input.seekg(ChunkStart);
+					BytesRead=ChunkStart-StartOffset;
+					delete [] Buffer;
+					return true;
+				}
+
+				// If this was just a false alarm
+				Input.seekg((std::streamoff)(OffsetReset));
+				FullSize=0;
+			}
+			else if(Buffer[i]==79)
+			{
+				// Set the file offset
+				Input.seekg(ChunkStart);
+
+				// Check the chunk
+				if(CheckOggChunk(Input, FullSize))
 				{
 					// The file is valid so far, so return success
 					Input.seekg(ChunkStart);

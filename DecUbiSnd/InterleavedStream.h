@@ -4,45 +4,36 @@
 #pragma once
 #include "StreamHelper.h"
 
-// Information associated with each layer
-struct SInterleavedLayer
-{
-	bool Stereo;
-	unsigned short NumberExtraSamples;
-	short LeftSample;
-	short RightSample;
-	unsigned char LeftIndex;
-	unsigned char RightIndex;
-	unsigned long BlockSize;
-	bool First;
-};
-
 // Provides UbiSoft version 8 interleaved audio stream decoding
 class CInterleavedStream : public CStreamHelper
 {
 public:
-	enum ESubType
+	enum EAudioType
 	{
-		ST_UNKNOWN=0,
-		ST_ADPCM_MONO=4,
-		ST_ADPCM_STEREO=11,
-		ST_PCM=16
+		AT_PCM,
+		AT_ADPCM,
+		AT_OGGVORBIS
 	};
 
 protected:
-	unsigned short m_Type;
-	ESubType m_SubType;
-	unsigned long m_Layer;
-	unsigned long m_NumberBlocks;
-	std::vector<SInterleavedLayer> m_Layers;
+	struct SInterleavedLayer;
 
 protected:
-	virtual bool DoDecodeBlock(unsigned long MaxInputBytes);
+	EAudioType m_Type;
+	unsigned long m_Layer;
+	unsigned long m_NumberBlocks;
+	std::vector<SInterleavedLayer*> m_Layers;
+	unsigned long m_SampleRate;
+	unsigned char m_Channels;
+
+protected:
+	virtual bool DoDecodeBlock();
+	virtual bool DoReadBlock();
 	void DoRegisterParams();
+	void ClearLayers();
 
 public:
-	CInterleavedStream(std::istream& Input, std::streamsize Size);
-	CInterleavedStream(std::istream& Input, std::streamoff Offset, std::streamsize Size);
+	CInterleavedStream(CDataStream* Input);
 	virtual ~CInterleavedStream();
 
 	virtual bool SetLayer(long Layer);
@@ -52,5 +43,5 @@ public:
 	virtual unsigned long GetSampleRate() const;
 	virtual unsigned char GetChannels() const;
 	virtual std::string GetFormatName() const;
-	virtual ESubType GetSubType() const;
+	virtual EAudioType GetType() const;
 };

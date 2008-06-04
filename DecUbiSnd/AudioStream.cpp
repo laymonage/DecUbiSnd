@@ -12,7 +12,7 @@ struct CAudioStream::SParamDef
 	TGetStringParamProc GetString;
 };
 
-CAudioStream::CAudioStream(std::istream& Input, std::streamsize Size) :
+/*CAudioStream::CAudioStream(std::istream& Input, std::streamsize Size) :
 	m_Input(Input),
 	m_BeginOffset(m_Input.tellg()),
 	m_EndOffset(m_BeginOffset+Size),
@@ -30,12 +30,31 @@ CAudioStream::CAudioStream(std::istream& Input, std::streamoff Offset, std::stre
 {
 	m_Params=new std::map<std::string, SParamDef>;
 	return;
+}*/
+
+CAudioStream::CAudioStream(CDataStream* Input) :
+	m_InputStream(Input),
+	m_Params(NULL)
+{
+	m_Params=new std::map<std::string, SParamDef>;
+	return;
 }
 
 CAudioStream::~CAudioStream()
 {
 	delete m_Params;
 	return;
+}
+
+void CAudioStream::SetInputStream(CDataStream* Input)
+{
+	m_InputStream=Input;
+	return;
+}
+
+CDataStream* CAudioStream::GetInputStream() const
+{
+	return m_InputStream;
 }
 
 unsigned long CAudioStream::RecommendBufferLength() const

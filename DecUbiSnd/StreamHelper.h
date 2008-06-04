@@ -8,26 +8,20 @@
 class CStreamHelper : public CAudioStream
 {
 protected:
-	unsigned char* m_InputBuffer;
+	bool m_Initialized;
 	short* m_OutputBuffer;
-	unsigned long m_InputBufferLength;
 	unsigned long m_OutputBufferLength;
-	unsigned long m_InputBufferOffset;
 	unsigned long m_OutputBufferOffset;
-	unsigned long m_InputBufferUsed;
 	unsigned long m_OutputBufferUsed;
 
 protected:
-	virtual bool DoDecodeBlock(unsigned long MaxInputBytes)=0;
-	virtual void PrepareInputBuffer(unsigned long InputBufferLength);
+	virtual bool DoDecodeBlock()=0;
 	virtual void PrepareOutputBuffer(unsigned long OutputBufferLength);
-	virtual bool FillInputBuffer(unsigned long NumberBytes);
-	virtual unsigned long GetInputBytesLeft(unsigned long MaxNumberBytes=0xFFFFFFFF);
-
+	
 public:
-	CStreamHelper(std::istream& Input, std::streamsize Size);
-	CStreamHelper(std::istream& Input, std::streamoff Offset, std::streamsize Size);
+	CStreamHelper(CDataStream* Input);
 	virtual ~CStreamHelper();
 
-	virtual bool Decode(short* Buffer, unsigned long& NumberSamples, unsigned long MaxInputBytes=0xFFFFFFFF);
+	virtual bool IsInitialized() const;
+	virtual bool Decode(short* Buffer, unsigned long& NumberSamples);
 };
