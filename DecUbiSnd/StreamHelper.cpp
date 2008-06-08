@@ -2,6 +2,7 @@
 //
 
 #include "stdafx.h"
+#include "DataExceptions.h"
 #include "StreamHelper.h"
 #include "DataStream.h"
 
@@ -123,11 +124,22 @@ bool CStreamHelper::Decode(short* Buffer, unsigned long& NumberSamples)
 			break;
 		}
 
-		// Decode some data into the buffer
-		if(!DoDecodeBlock())
+		try
 		{
-			PrepareOutputBuffer(0);
-			return false;
+			// Decode some data into the buffer
+			if(!DoDecodeBlock())
+			{
+				PrepareOutputBuffer(0);
+				return false;
+			}
+		}
+		catch(XNeedBuffer& e)
+		{
+			// Save the data that is in the buffer
+			PrepareOutputBuffer(BufferPos);
+			memcpy(m_OutputBuffer, Buffer, BufferPos*2);
+			m_OutputBufferUsed=BufferPos;
+			throw(e);
 		}
 
 		// Exit if at the end of the stream
