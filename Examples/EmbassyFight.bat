@@ -1,0 +1,1 @@
+@"../DecUbiSnd" "C:\Program Files\UBISOFT\Splinter Cell Pandora Tomorrow\offline\data\sounds\Music_Emb.SS0" -g EmbassyFight.seg -o ../EmbassyFight.wav --sample-rate 36000

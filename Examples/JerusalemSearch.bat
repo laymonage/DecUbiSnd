@@ -1,0 +1,1 @@
+@"../DecUbiSnd" "C:\Program Files\UBISOFT\Splinter Cell Pandora Tomorrow\offline\data\sounds\Music_Jeru.SS0" -i 8895044 -s 3232961 -o ../JerusalemSearch.wav --sample-rate 36000

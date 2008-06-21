@@ -1,1 +1,0 @@
-@DecUbiSnd "C:\Program Files\UBISOFT\Splinter Cell Pandora Tomorrow\offline\data\sounds\Music_Common.SS0" -i 0 -s 4531710 -w -o Common.wav --stereo
