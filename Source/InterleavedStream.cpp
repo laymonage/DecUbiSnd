@@ -44,30 +44,21 @@ bool CInterleavedStream::InitializeHeader()
 	return InitializeHeader(0);
 }
 
-bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char Force)
+bool CInterleavedStream::InitializeHeader(unsigned long SampleRate)
 {
-	// Check the parameters
-	if(Channels<1 || Channels>2)
+	return InitializeHeader(SampleRate, 2);
+}
+
+bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned char PcmChannels)
+{
+	// Check params
+	if(PcmChannels<1)
 	{
-		throw(XUserException("The number of channels must 1 or 2"));
-	}
-	if(!(Force==0 || Force==8))
-	{
-		throw(XUserException("Cannot force a file to be invalid (must be 0 or 8)"));
+		PcmChannels=2;
 	}
 
 	// Clear previous data
 	Clear();
-
-	// Set the stereo flag
-	if(Channels==1)
-	{
-		m_Channels=1;
-	}
-	else if(Channels==2 || Channels==0)
-	{
-		m_Channels=2;
-	}
 
 	// Read the type from the file
 	unsigned short Type;
@@ -76,16 +67,9 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 		m_InputStream->SeekToBeginning();
 	}
 	m_InputStream->ExactRead(&Type, 2);
-	if(Force)
+	if(Type!=8)
 	{
-		Type=Force;
-	}
-	else
-	{
-		if(Type!=8)
-		{
-			throw(XFileException("File does not have the correct signature (should be 08)"));
-		}
+		throw(XFileException("File does not have the correct signature (should be 08)"));
 	}
 
 	// Read the first header
@@ -133,6 +117,15 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 			// Must be PCM, there is no header
 			Layer.Type=AT_PCM;
 			Layer.Stream=NULL;
+			if(SampleRate==0)
+			{
+				m_SampleRate=44100;
+			}
+			else
+			{
+				m_SampleRate=SampleRate;
+			}
+			m_Channels=PcmChannels;
 		}
 		else if((Buffer[0]==5 || Buffer[0]==3) && HeaderSizes[i]>=28)
 		{
@@ -151,11 +144,15 @@ bool CInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char 
 			try
 			{
 				// Initialize the header
-				if(!Stream->InitializeHeader(Channels))
+				if(!Stream->InitializeHeader(SampleRate))
 				{
 					Clear();
 					return false;
 				}
+
+				// Get some information
+				m_SampleRate=Stream->GetSampleRate();
+				m_Channels=Stream->GetChannels();
 			}
 			catch(XNeedBuffer&)
 			{
