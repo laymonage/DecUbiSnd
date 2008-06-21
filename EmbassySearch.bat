@@ -1,1 +1,0 @@
-@DecUbiSnd "C:\Program Files\UBISOFT\Splinter Cell Pandora Tomorrow\offline\data\sounds\Music_Emb.SS0" -i 9015072 -s 3238562 -w -o EmbassySearch.wav --stereo
