@@ -1,2 +1,2 @@
 @rem Only works with the Splinter Cell Double Agent Demo
-@"../DecUbiSnd" "C:\Program Files\UBISOFT\Demo\Tom Clancy's Splinter Cell Double Agent Demo\SCDA-Offline\Sounds\STREAM.SS0" -i 55725988 -s 9758177 -o ../Output.wav --sample-rate 36000
+@"../DecUbiSnd" "C:\Program Files\UBISOFT\Demo\Tom Clancy's Splinter Cell Double Agent Demo\SCDA-Offline\Sounds\STREAM.SS0" -i 55725988 -s 9758177 -o ../Output.wav --sample-rate 48000

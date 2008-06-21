@@ -13,6 +13,7 @@ CVersion5Stream::CVersion5Stream(CDataStream* Input) :
 	CStreamHelper(Input),
 	m_Type(5),
 	m_NumberExtraSamples(0),
+	m_SampleRate(44100),
 	m_Stereo(true),
 	m_LeftSample(0),
 	m_LeftIndex(0),
@@ -29,21 +30,11 @@ CVersion5Stream::~CVersion5Stream()
 
 bool CVersion5Stream::InitializeHeader()
 {
-	return InitializeHeader(2);
+	return InitializeHeader(0);
 }
 
-bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char Force)
+bool CVersion5Stream::InitializeHeader(unsigned long SampleRate)
 {
-	// Check the parameters
-	if(Channels<1 || Channels>2)
-	{
-		throw(XUserException("The number of channels must 1 or 2"));
-	}
-	if(!(Force==0 || Force==3 || Force==5))
-	{
-		throw(XUserException("Cannot force a file to be invalid (must be 0, 3, or 5)"));
-	}
-
 	// Clear old data
 	m_OutputBufferOffset=0;
 	m_OutputBufferUsed=0;
@@ -54,20 +45,16 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 		m_InputStream->SeekToBeginning();
 	}
 	m_InputStream->ExactRead(&m_Type, 1);
-	if(Force)
+	if(m_Type!=3 && m_Type!=5)
 	{
-		m_Type=Force;
-	}
-	else
-	{
-		if(m_Type!=3 && m_Type!=5)
-		{
-			throw(XFileException("File does not have the correct signature (should be 03 or 05)"));
-		}
+		throw(XFileException("File does not have the correct signature (should be 03 or 05)"));
 	}
 
 	// Read the rest of the first header
-	m_InputStream->ExactIgnore(13);
+	unsigned char MonoStereo;
+	m_InputStream->ExactIgnore(11);
+	m_InputStream->ExactRead(&MonoStereo, 1);
+	m_InputStream->ExactIgnore(1);
 	m_InputStream->ExactRead(&m_NumberExtraSamples, 2);
 	m_InputStream->ExactRead(&m_LeftSample, 2);
 	m_InputStream->ExactRead(&m_LeftIndex, 1);
@@ -85,13 +72,17 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 	}
 
 	// Figure out whether it is mono or stereo
-	if(Channels==1)
+	if(MonoStereo==0)
 	{
 		m_Stereo=false;
 	}
-	else if(Channels==2)
+	else if(MonoStereo==1)
 	{
 		m_Stereo=true;
+	}
+	else
+	{
+		throw(XFileException("The mono/stereo flag has an unrecognized value"));
 	}
 
 	// Give a warning if the number of extra samples is unrecognized
@@ -102,6 +93,23 @@ bool CVersion5Stream::InitializeHeader(unsigned char Channels, unsigned char For
 	if(m_Stereo)
 	{
 		m_NumberExtraSamples*=2;
+	}
+
+	// Set the sample rate
+	if(!SampleRate)
+	{
+		if(m_Type==3)
+		{
+			m_SampleRate=36000;
+		}
+		else if(m_Type==5)
+		{
+			m_SampleRate=48000;
+		}
+	}
+	else
+	{
+		m_SampleRate=SampleRate;
 	}
 	m_Initialized=true;
 	return true;
@@ -184,16 +192,7 @@ bool CVersion5Stream::DoDecodeBlock()
 
 unsigned long CVersion5Stream::GetSampleRate() const
 {
-	// Check each possible type
-	if(m_Type==3)
-	{
-		return 36000;
-	}
-	else if(m_Type==5)
-	{
-		return 48000;
-	}
-	return 22050;
+	return m_SampleRate;
 }
 
 unsigned char CVersion5Stream::GetChannels() const

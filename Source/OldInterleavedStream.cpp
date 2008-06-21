@@ -41,30 +41,10 @@ bool COldInterleavedStream::InitializeHeader()
 	return InitializeHeader(0);
 }
 
-bool COldInterleavedStream::InitializeHeader(unsigned char Channels, unsigned char Force)
+bool COldInterleavedStream::InitializeHeader(unsigned long SampleRate)
 {
-	// Check the parameters
-	if(Channels<1 || Channels>2)
-	{
-		throw(XUserException("The number of channels must 1 or 2"));
-	}
-	if(!(Force==0 || Force==2))
-	{
-		throw(XUserException("Cannot force a file to be invalid (must be 0 or 2)"));
-	}
-
 	// Clear previous data
 	Clear();
-
-	// Set the stereo flag
-	if(Channels==1)
-	{
-		m_Stereo=false;
-	}
-	else if(Channels==2)
-	{
-		m_Stereo=true;
-	}
 
 	// Read the type from the file
 	unsigned short Type;
@@ -73,16 +53,9 @@ bool COldInterleavedStream::InitializeHeader(unsigned char Channels, unsigned ch
 		m_InputStream->SeekToBeginning();
 	}
 	m_InputStream->ExactRead(&Type, 2);
-	if(Force)
+	if(Type!=2)
 	{
-		Type=Force;
-	}
-	else
-	{
-		if(Type!=2)
-		{
-			throw(XFileException("File does not have the correct signature (should be 02)"));
-		}
+		throw(XFileException("File does not have the correct signature (should be 02)"));
 	}
 
 	// Read the header
@@ -144,10 +117,21 @@ bool COldInterleavedStream::InitializeHeader(unsigned char Channels, unsigned ch
 		try
 		{
 			// Initialize the header
-			if(!Layer.Stream->InitializeHeader(m_Stereo ? 2 : 1))
+			if(!Layer.Stream->InitializeHeader(SampleRate))
 			{
 				Clear();
 				return false;
+			}
+
+			// Get channels and sample rate
+			m_SampleRate=Layer.Stream->GetSampleRate();
+			if(Layer.Stream->GetChannels()==1)
+			{
+				m_Stereo=false;
+			}
+			else
+			{
+				m_Stereo=true;
 			}
 		}
 		catch(XNeedBuffer&)
@@ -256,12 +240,6 @@ bool COldInterleavedStream::DoReadBlock()
 		Layer.Data->SendBuffer(Buffer, BlockSizes[i]);
 	}
 	return true;
-}
-
-void COldInterleavedStream::SetSampleRate(unsigned long SampleRate)
-{
-	m_SampleRate=SampleRate;
-	return;
 }
 
 unsigned long COldInterleavedStream::GetSampleRate() const

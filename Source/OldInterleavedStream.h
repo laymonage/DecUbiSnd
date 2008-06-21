@@ -30,8 +30,7 @@ public:
 	virtual ~COldInterleavedStream();
 
 	virtual bool InitializeHeader();
-	virtual bool InitializeHeader(unsigned char Channels, unsigned char Force=0);
-	virtual void SetSampleRate(unsigned long SampleRate);
+	virtual bool InitializeHeader(unsigned long SampleRate);
 	virtual unsigned long GetSampleRate() const;
 	virtual unsigned char GetChannels() const;
 	virtual std::string GetFormatName() const;

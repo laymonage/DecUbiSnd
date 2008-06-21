@@ -10,6 +10,7 @@ class CVersion5Stream : public CStreamHelper
 protected:
 	unsigned char m_Type;
 	unsigned short m_NumberExtraSamples;
+	unsigned long m_SampleRate;
 	bool m_Stereo;
 	short m_LeftSample;
 	short m_RightSample;
@@ -24,7 +25,7 @@ public:
 	virtual ~CVersion5Stream();
 
 	virtual bool InitializeHeader();
-	virtual bool InitializeHeader(unsigned char Channels, unsigned char Force=0);
+	virtual bool InitializeHeader(unsigned long SampleRate);
 	virtual unsigned long GetSampleRate() const;
 	virtual unsigned char GetChannels() const;
 	virtual std::string GetFormatName() const;
