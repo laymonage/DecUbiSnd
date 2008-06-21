@@ -400,42 +400,8 @@ int Decode(SArguments& Args)
 			CVersion5Stream Stream(&FileStream);
 			try
 			{
-				// Automatic channels detection
-				if(Channels==0)
-				{
-					unsigned long MonoCount=-1;
-					unsigned long StereoCount=-1;
-
-					// Try mono
-					if(Stream.InitializeHeader(1, Type==EUF_UBI_V5 ? 5 : 3))
-					{
-						MonoCount=GetNumberSampleClips(Stream);
-					}
-
-					// Try stereo
-					if(Stream.InitializeHeader(2, Type==EUF_UBI_V5 ? 5 : 3))
-					{
-						StereoCount=GetNumberSampleClips(Stream);
-					}
-
-					// Figure out which one
-					if(MonoCount<StereoCount)
-					{
-						Channels=1;
-					}
-					else if(StereoCount<MonoCount)
-					{
-						Channels=2;
-					}
-					else
-					{
-						std::cerr << "Could not determine the number of channels; assuming stereo" << std::endl;
-						Channels=2;
-					}
-				}
-
 				// Initialize
-				if(!Stream.InitializeHeader(Channels, Type==EUF_UBI_V5 ? 5 : 3))
+				if(!Stream.InitializeHeader(SampleRate))
 				{
 					std::cerr << "Problems initializing the header." << std::endl;
 					continue;
@@ -498,7 +464,7 @@ int Decode(SArguments& Args)
 				}
 				Stream.SetCurrentLayers(Args.InputLayers);
 
-				// Automatic channels detection
+				/*// Automatic channels detection
 				if(Channels==0)
 				{
 					unsigned long MonoCount=-1;
@@ -548,10 +514,10 @@ int Decode(SArguments& Args)
 						std::cerr << "Could not determine the number of channels; assuming stereo" << std::endl;
 						Channels=2;
 					}
-				}
+				}*/
 
 				// Initialize
-				if(!Stream.InitializeHeader(Channels, Args.InputTypeForce))
+				if(!Stream.InitializeHeader(SampleRate, Args.InputChannels))
 				{
 					std::cerr << "Problems initializing the header." << std::endl;
 					continue;
@@ -626,42 +592,8 @@ int Decode(SArguments& Args)
 				}
 				Stream.SetCurrentLayers(Args.InputLayers);
 
-				// Automatic channels detection
-				if(Channels==0)
-				{
-					unsigned long MonoCount=-1;
-					unsigned long StereoCount=-1;
-
-					// Try mono
-					if(Stream.InitializeHeader(1, Args.InputTypeForce))
-					{
-						MonoCount=GetNumberSampleClips(Stream);
-					}
-
-					// Try stereo
-					if(Stream.InitializeHeader(2, Args.InputTypeForce))
-					{
-						StereoCount=GetNumberSampleClips(Stream);
-					}
-
-					// Figure out which one
-					if(MonoCount<StereoCount)
-					{
-						Channels=1;
-					}
-					else if(StereoCount<MonoCount)
-					{
-						Channels=2;
-					}
-					else
-					{
-						std::cerr << "Could not determine the number of channels; assuming stereo" << std::endl;
-						Channels=2;
-					}
-				}
-
 				// Initialize
-				if(!Stream.InitializeHeader(Channels, Args.InputTypeForce))
+				if(!Stream.InitializeHeader(SampleRate))
 				{
 					std::cerr << "Problems initializing the header." << std::endl;
 					continue;

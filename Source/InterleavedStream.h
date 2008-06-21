@@ -38,7 +38,8 @@ public:
 	virtual ~CInterleavedStream();
 
 	virtual bool InitializeHeader();
-	virtual bool InitializeHeader(unsigned char Channels, unsigned char Force=0);
+	virtual bool InitializeHeader(unsigned long SampleRate);
+	virtual bool InitializeHeader(unsigned long SampleRate, unsigned char PcmChannels);
 	virtual unsigned long GetSampleRate() const;
 	virtual unsigned char GetChannels() const;
 	virtual std::string GetFormatName() const;
