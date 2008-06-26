@@ -1,7 +1,7 @@
 // DataExceptions.h : Data stream exceptions
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "DataExceptions.h"
 
 XDataException::XDataException()

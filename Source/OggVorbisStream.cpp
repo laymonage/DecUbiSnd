@@ -1,7 +1,7 @@
 // OggVorbisStream.cpp : An Ogg Vorbis stream
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>

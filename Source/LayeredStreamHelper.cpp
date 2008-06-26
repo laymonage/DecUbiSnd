@@ -1,7 +1,7 @@
 // LayeredStreamHelper.cpp : Layered audio stream decoding helper class
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "LayeredStreamHelper.h"
 #include "DataExceptions.h"
 #include "AudioExceptions.h"

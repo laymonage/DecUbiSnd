@@ -1,7 +1,7 @@
 // Main.cpp : Defines the entry point for the console application
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "UbiFormats.h"
 #include "FileDataStream.h"
 #include "Scan.h"
@@ -12,7 +12,8 @@
 enum EAction
 {
 	EACT_DECODE,
-	EACT_SCAN
+	EACT_SCAN,
+	EACT_LAYEREXTRACT
 };
 
 // The arguments sent to the application
@@ -79,6 +80,10 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 		else if(Arg=="-S" || Arg=="--scan")
 		{
 			Args.Action=EACT_SCAN;
+		}
+		else if(Arg=="-L" || Arg=="--layer-extract")
+		{
+			Args.Action=EACT_LAYEREXTRACT;
 		}
 		else if(Arg=="-o" || Arg=="--output")
 		{
@@ -361,30 +366,35 @@ int Decode(SArguments& Args)
 		}
 
 		// Determine the type
-		unsigned char Signature;
+		unsigned char Signature[4];
 		EUbiFormat Type;
 		Input.seekg(Segment.GetOffset());
 		Type=Args.InputTypeForce;
-		Signature=Input.get();
+		Input.read((char*)Signature, 4);
 		if(Type==EUF_NULL)
 		{
-			if(Signature==3)
+			if(Signature[0]==3)
 			{
 				Type=EUF_UBI_V3;
 			}
-			else if(Signature==5)
+			else if(Signature[0]==5)
 			{
 				Type=EUF_UBI_V5;
 			}
-			else if(Signature==2)
+			else if(Signature[0]==2)
 			{
 				Type=EUF_UBI_IV2;
 			}
-			else if(Signature==8)
+			else if(Signature[0]==8 && Signature[1]==0)
 			{
 				Type=EUF_UBI_IV8;
 			}
-			else if(Signature==79)
+			else if(Signature[3]==8 && Signature[2]==0)
+			{
+				Type=EUF_UBI_IV8;
+			}
+			else if(Signature[0]=='O' && Signature[1]=='g' && Signature[2]=='g' && \
+				Signature[3]=='S')
 			{
 				Type=EUF_OGG;
 			}
@@ -892,6 +902,149 @@ int Scan(SArguments& Args)
 	return 0;
 }
 
+int LayerExtract(SArguments& Args)
+{
+	// Check the arguments
+	if(Args.InputFilename=="")
+	{
+		std::cerr << "Input file not specified." << std::endl;
+		return 1;
+	}
+	if(Args.OutputFilename=="")
+	{
+		std::cerr << "Output file not specified." << std::endl;
+		return 1;
+	}
+
+	// Open the input stream
+	std::ifstream Input;
+	Input.open(Args.InputFilename.c_str(), std::ios_base::in | std::ios_base::binary);
+	if(!Input.is_open())
+	{
+		std::cerr << "Unable to open input file '" << Args.InputFilename << "'." << std::endl;
+		return 2;
+	}
+
+	// If the size is not specified, compute it
+	if(Args.InputSize==0)
+	{
+		Input.seekg(0, std::ios_base::end);
+		if(Args.InputOffset<=Input.tellg())
+		{
+			Args.InputSize=(std::streamoff)Input.tellg()-Args.InputOffset;
+		}
+		Input.seekg(0);
+	}
+
+	// Open the output stream
+	std::ofstream Output;
+	Output.open(Args.OutputFilename.c_str(), std::ios_base::out | std::ios_base::trunc | std::ios_base::binary);
+	if(!Output.is_open())
+	{
+		std::cerr << "Unable to open output file '" << Args.OutputFilename << "'." << std::endl;
+		return 3;
+	}
+
+	// Determine the type
+	unsigned char Signature[4];
+	EUbiFormat Type;
+	Input.seekg(Args.InputOffset);
+	Type=Args.InputTypeForce;
+	Input.read((char*)Signature, 4);
+	if(Type==EUF_NULL)
+	{
+		if(Signature[0]==3)
+		{
+			Type=EUF_UBI_V3;
+		}
+		else if(Signature[0]==5)
+		{
+			Type=EUF_UBI_V5;
+		}
+		else if(Signature[0]==2)
+		{
+			Type=EUF_UBI_IV2;
+		}
+		else if(Signature[0]==8 && Signature[1]==0)
+		{
+			Type=EUF_UBI_IV8;
+		}
+		else if(Signature[3]==8 && Signature[2]==0)
+		{
+			Type=EUF_UBI_IV8;
+		}
+		else if(Signature[0]=='O' && Signature[1]=='g' && Signature[2]=='g' && \
+			Signature[3]=='S')
+		{
+			Type=EUF_OGG;
+		}
+		else
+		{
+			std::cerr << "The input file is not a supported format. ";
+			std::cerr << "Use --input-type to force a specific format." << std::endl;
+			Input.close();
+			Output.close();
+			return 100;
+		}
+	}
+
+	// Set up an input stream
+	CFileDataStream FileStream(&Input, Args.InputOffset, Args.InputSize);
+
+	// Get the layer
+	unsigned long Layer;
+	if(Args.InputLayers.size()!=1)
+	{
+		std::cerr << "You must specify one layer" << std::cerr;
+		Input.close();
+		Output.close();
+		return 100;
+	}
+	Layer=Args.InputLayers[0];
+
+	// Do the layer extract
+	try
+	{
+		if(Type==EUF_UBI_IV8)
+		{
+			if(!CInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+			{
+				std::cerr << "Error extracting layers" << std::endl;
+			}
+		}
+		if(Type==EUF_UBI_IV2)
+		{
+			if(!COldInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+			{
+				std::cerr << "Error extracting layers" << std::endl;
+			}
+		}
+		else
+		{
+			std::cerr << "This format cannot be layer extracted" << std::endl;
+		}
+	}
+	catch(XDataException& e)
+	{
+		std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
+		std::cerr << e.GetMessage() << std::endl;
+	}
+	catch(XAudioException& e)
+	{
+		std::cerr << e.GetFriendlyMessage() << std::endl;
+		std::cerr << "Details: " << e.GetMessage() << std::endl;
+	}
+	catch(...)
+	{
+		std::cerr << "Unspecified error" << std::endl;
+	}
+
+	// Finish up
+	Input.close();
+	Output.close();
+	return 0;
+}
+
 int _tmain(int Argc, _TCHAR* Argv[])
 {
 	// Parse the arguments
@@ -932,6 +1085,13 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  -i, --offset Number   Specify the offset to begin scanning" << std::endl;
 		std::cout << "  -s, --size Number     Specify the number of bytes to scan" << std::endl;
 		std::cout << std::endl;
+		std::cout << "Layer Extract: (-L, --layer-extract)" << std::endl;
+		std::cout << "  -o, --output File     Specify the output filename" << std::endl;
+		std::cout << "  -i, --offset Number   Specify the offset of the stream" << std::endl;
+		std::cout << "  -s, --size Number     Specify the number of bytes in the stream" << std::endl;
+		std::cout << "  -l, --layer Number    Specify the layer number" << std::endl;
+		std::cout << "  --input-type Type     Force it to use the decoder for Type (see below)" << std::endl;
+		std::cout << std::endl;
 		std::cout << "Raw UbiSoft ADPCM Decode: (--input-type ubi_raw)" << std::endl;
 		std::cout << "  --comp-left Smp Idx   Specify left decompression parameters" << std::endl;
 		std::cout << "  --comp-right Smp Idx  Specify right decompression parameters" << std::endl;
@@ -963,6 +1123,9 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		break;
 		case EACT_SCAN:
 			ReturnValue=Scan(Args);
+		break;
+		case EACT_LAYEREXTRACT:
+			ReturnValue=LayerExtract(Args);
 		break;
 	}
 	return 0;
