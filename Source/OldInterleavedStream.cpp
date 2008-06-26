@@ -1,7 +1,7 @@
 // OldInterleavedStream.cpp : UbiSoft version 2 interleaved audio stream decoding
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "OldInterleavedStream.h"
 #include "Version5Stream.h"
 #include "BufferDataStream.h"
@@ -238,6 +238,80 @@ bool COldInterleavedStream::DoReadBlock()
 		void* Buffer;
 		Buffer=m_InputStream->ExactRead(BlockSizes[i]);
 		Layer.Data->SendBuffer(Buffer, BlockSizes[i]);
+	}
+	return true;
+}
+
+bool COldInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, std::ostream& Output)
+{
+	// Read the type from the file
+	unsigned short Type;
+	if(Input->CanSeekBackward())
+	{
+		Input->SeekToBeginning();
+	}
+	Input->ExactRead(&Type, 2);
+	if(Type!=2)
+	{
+		throw(XFileException("File does not have the correct signature (should be 02)"));
+	}
+
+	// Read the header
+	unsigned long NumberLayers;
+	unsigned long TotalSize;
+	Input->ExactIgnore(2);
+	Input->ExactRead(&NumberLayers, 4);
+	Input->ExactRead(&TotalSize, 4);
+	Input->ExactIgnore(12);
+
+	// Set the total number of bytes
+	unsigned long BlockNumber=1;
+
+	// A check
+	if(NumberLayers!=3)
+	{
+		std::cerr << "Information: " << NumberLayers << " layers" << std::endl;
+	}
+
+	// Loop through all the blocks
+	while(true)
+	{
+		// Check for the end of the file
+		if(Input->IsEnd() || Input->Tell()>=TotalSize)
+		{
+			break;
+		}
+
+		// Process the first block header
+		unsigned long BlockID;
+		Input->ExactRead(&BlockID, 4);
+		if(BlockID!=BlockNumber)
+		{
+			throw(XFileException("Error: Invalid block ID"));
+		}
+		BlockNumber++;
+		Input->ExactIgnore(4);
+
+		// Read in the block sizes
+		std::vector<unsigned long> BlockSizes;
+		for(unsigned long i=0;i<NumberLayers;i++)
+		{
+			unsigned long BlockSize;
+			Input->ExactRead(&BlockSize, 4);
+			BlockSizes.push_back(BlockSize);
+		}
+
+		// Go through each of the layers
+		for(unsigned long i=0;i<NumberLayers;i++)
+		{
+			// Read
+			void* Buffer;
+			Buffer=Input->ExactRead(BlockSizes[i]);
+			if(i==Layer)
+			{
+				Output.write((char*)Buffer, BlockSizes[i]);
+			}
+		}
 	}
 	return true;
 }

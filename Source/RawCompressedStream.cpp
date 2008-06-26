@@ -1,7 +1,7 @@
 // RawCompressedStream.cpp : UbiSoft raw compressed audio stream decoding
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "RawCompressedStream.h"
 #include "Adpcm.h"
 #include "DataStream.h"

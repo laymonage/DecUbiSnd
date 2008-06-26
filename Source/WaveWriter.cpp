@@ -1,7 +1,7 @@
 // WaveWriter.cpp : Functions for writing wave files
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "WaveWriter.h"
 
 // Wave 'fmt ' chunk

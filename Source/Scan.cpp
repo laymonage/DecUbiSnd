@@ -1,8 +1,12 @@
 // Scan.cpp : Scan for UbiSoft format audio in files
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "Scan.h"
+
+#define SwapLong(_Value) (((unsigned long)(_Value)&0xFF000000)>>24 | ((unsigned long)(_Value)&0x00FF0000)>>8 | \
+			((unsigned long)(_Value)&0x000000FF)<<24 | ((unsigned long)(_Value)&0x0000FF00)<<8)
+#define SwapShort(_Value) (((unsigned short)(_Value)&0xFF00)>>8 | (((unsigned short)(_Value)&0x00FF)<<8)
 
 // Check an Ogg chunk
 static bool CheckOggChunk(std::istream& Input, std::streamsize& FullSize)
@@ -110,7 +114,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 		for(unsigned long i=0;i<(unsigned long)NextRead;i++)
 		{
 			// Store some variables
-			const std::streamoff ChunkStart=(std::streamoff)CurrentOffset+i;
+			std::streamoff ChunkStart=(std::streamoff)CurrentOffset+i;
 
 			if(Buffer[i]==3 || Buffer[i]==5)
 			{
@@ -124,7 +128,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 
 				// Check the characters
 				if(Char[9]==0 && Char[10]==0 && Char[11]==0 && Char[18]<89 && \
-					/*(Char[19]==0 || Char[19]==119) &&*/ Char[22]<89 /*&& Char[23]<5*/)
+					(Char[12]==0 || Char[12]==1) && Char[22]<89 /*&& Char[23]<5*/)
 				{
 					ChunkValid=true;
 				}
@@ -160,7 +164,6 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 			}
 			else if(Buffer[i]==2)
 			{
-				//__asm int 3;
 				// Some assumptions
 				unsigned char Char[24];
 				bool ChunkValid=false;
@@ -237,6 +240,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				// Some assumptions
 				unsigned char Char[28];
 				bool ChunkValid=false;
+				bool BigEndian=false;
 
 				// Read in the characters
 				Input.seekg(ChunkStart);
@@ -247,12 +251,35 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 					Char[9]==0 && Char[10]==0 && Char[11]==0)
 				{
 					ChunkValid=true;
+					BigEndian=false;
+				}
+				else if(ChunkStart>=3)
+				{
+					// Adjust the chuck size and reread
+					ChunkStart-=3;
+					Input.seekg(ChunkStart);
+					Input.read((char*)Char, 28);
+
+					// Now check the characters
+					if(Char[3]==8 && Char[2]==0 && Char[0]==0 && \
+						Char[8]==0 && Char[9]==0 && Char[10]==0)
+					{
+						ChunkValid=true;
+						BigEndian=true;
+					}
 				}
 
 				// Get some information
 				unsigned long NumberLayers=*((unsigned long*)(Char+8));
 				unsigned long NumberBuffers=*((unsigned long*)(Char+12));
 				std::streamsize HeaderSkip=*((unsigned long*)(Char+20));
+
+				if(BigEndian)
+				{
+					NumberLayers=SwapLong(NumberLayers);
+					NumberBuffers=SwapLong(NumberBuffers);
+					HeaderSkip=SwapLong(HeaderSkip);
+				}
 
 				// Verify the information
 				if(HeaderSkip>=EndOffset-ChunkStart || HeaderSkip<(std::streamsize)NumberLayers*4)
@@ -274,11 +301,19 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 						std::streamsize TotalBytes=0;
 
 						Input.read((char*)&Signature, 4);
+						if(BigEndian)
+						{
+							Signature=SwapLong(Signature);
+						}
 						Input.seekg(4, std::ios_base::cur);
 						for(unsigned long j=0;j<NumberLayers;j++)
 						{
 							unsigned long Size;
 							Input.read((char*)&Size, 4);
+							if(BigEndian)
+							{
+								Size=SwapLong(Size);
+							}
 							TotalBytes+=Size;
 						}
 

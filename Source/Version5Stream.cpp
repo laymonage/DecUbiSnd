@@ -1,7 +1,7 @@
 // Version5Stream.cpp : UbiSoft version 3 and 5 audio stream decoding
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "Version5Stream.h"
 #include "Adpcm.h"
 #include "DataStream.h"

@@ -1,7 +1,7 @@
 // SegmentParser.cpp : Segment definition file parser
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "SegmentParser.h"
 
 CSegmentParser::CSegmentParser() :

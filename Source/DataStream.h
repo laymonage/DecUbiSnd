@@ -6,6 +6,13 @@
 // A data stream
 class CDataStream
 {
+public:
+	enum EEndian
+	{
+		LittleEndian,
+		BigEndian
+	};
+
 protected:
 	unsigned char* m_ReadBuffer;
 	unsigned long m_ReadBufferLength;
@@ -14,6 +21,9 @@ protected:
 
 	unsigned long m_CurrentOffset;
 	unsigned long m_Length;
+
+	EEndian m_Endian;
+	bool m_NeedSwap;
 
 protected:
 	virtual unsigned long DoRead(void* Buffer, unsigned long Length, bool Exact)=0;
@@ -47,4 +57,13 @@ public:
 	virtual unsigned long Tell() const;
 	virtual unsigned long GetLength() const;
 	virtual bool IsEnd() const;
+
+	virtual void SetEndian(EEndian Endian);
+	virtual EEndian GetEndian() const;
+	virtual unsigned long ExactReadULong();
+	virtual long ExactReadLong();
+	virtual unsigned short ExactReadUShort();
+	virtual short ExactReadShort();
+	virtual unsigned char ExactReadUChar();
+	virtual char ExactReadChar();
 };

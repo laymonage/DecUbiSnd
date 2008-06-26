@@ -1,7 +1,7 @@
 // ADPCM.cpp : Decompresses ADPCM waveforms
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "Adpcm.h"
 
 // The index table

@@ -1,7 +1,7 @@
 // Segment.cpp : Segment definition
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "Segment.h"
 
 CSegment::CSegment() :
