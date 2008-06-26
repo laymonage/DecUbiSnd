@@ -1,7 +1,7 @@
 // InterleavedStream.h : UbiSoft version 8 interleaved audio stream decoding
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "InterleavedStream.h"
 #include "Version5Stream.h"
 #include "OggVorbisStream.h"
@@ -62,23 +62,31 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 
 	// Read the type from the file
 	unsigned short Type;
+	unsigned short SubType;
 	if(m_InputStream->CanSeekBackward())
 	{
 		m_InputStream->SeekToBeginning();
 	}
 	m_InputStream->ExactRead(&Type, 2);
-	if(Type!=8)
+	m_InputStream->ExactRead(&SubType, 2);
+	if(Type==8)
+	{
+		m_InputStream->SetEndian(CDataStream::LittleEndian);
+	}
+	else if(SubType==0x0800)
+	{
+		m_InputStream->SetEndian(CDataStream::BigEndian);
+	}
+	else
 	{
 		throw(XFileException("File does not have the correct signature (should be 08)"));
 	}
 
 	// Read the first header
 	unsigned long NumberLayers;
-	unsigned short SubType;
-	m_InputStream->ExactRead(&SubType, 2);
 	m_InputStream->ExactIgnore(4);
-	m_InputStream->ExactRead(&NumberLayers, 4);
-	m_InputStream->ExactRead(&m_TotalBlocks, 4);
+	NumberLayers=m_InputStream->ExactReadULong();
+	m_TotalBlocks=m_InputStream->ExactReadULong();
 	m_InputStream->ExactIgnore(4);
 	m_InputStream->ExactIgnore(4);
 	m_InputStream->ExactIgnore(4);
@@ -90,7 +98,7 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 	{
 		// Read the audio header size
 		unsigned long HeaderSize;
-		m_InputStream->ExactRead(&HeaderSize, 4);
+		HeaderSize=m_InputStream->ExactReadULong();
 		HeaderSizes.push_back(HeaderSize);
 	}
 
@@ -314,19 +322,19 @@ bool CInterleavedStream::DoReadBlock()
 
 	// Process the first block header
 	unsigned long BlockID;
-	m_InputStream->ExactRead(&BlockID, 4);
+	BlockID=m_InputStream->ExactReadULong();
 	if(BlockID!=3)
 	{
 		throw(XFileException("Error: Invalid block ID"));
 	}
-	m_InputStream->ExactIgnore(4);
+	m_InputStream->ExactReadULong();
 
 	// Read in the block sizes
 	std::vector<unsigned long> BlockSizes;
 	for(unsigned long i=0;i<m_Layers.size();i++)
 	{
 		unsigned long BlockSize;
-		m_InputStream->ExactRead(&BlockSize, 4);
+		BlockSize=m_InputStream->ExactReadULong();
 		BlockSizes.push_back(BlockSize);
 	}
 
@@ -343,6 +351,108 @@ bool CInterleavedStream::DoReadBlock()
 		Layer.Data->SendBuffer(Buffer, BlockSizes[i]);
 	}
 	m_NumberBlocks--;
+	return true;
+}
+
+bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, std::ostream& Output)
+{
+	// Read the type from the file
+	unsigned short Type;
+	unsigned short SubType;
+	if(Input->CanSeekBackward())
+	{
+		Input->SeekToBeginning();
+	}
+	Input->ExactRead(&Type, 2);
+	Input->ExactRead(&SubType, 2);
+	if(Type==8)
+	{
+		Input->SetEndian(CDataStream::LittleEndian);
+	}
+	else if(SubType==0x0800)
+	{
+		Input->SetEndian(CDataStream::BigEndian);
+	}
+	else
+	{
+		throw(XFileException("File does not have the correct signature (should be 08)"));
+	}
+
+	// Read the first header
+	unsigned long NumberLayers;
+	unsigned long NumberBlocks;
+	Input->ExactIgnore(4);
+	NumberLayers=Input->ExactReadULong();
+	NumberBlocks=Input->ExactReadULong();
+	Input->ExactIgnore(4);
+	Input->ExactIgnore(4);
+	Input->ExactIgnore(4);
+
+	// Process the second header
+	std::vector<unsigned long> HeaderSizes;
+	for(unsigned long i=0;i<NumberLayers;i++)
+	{
+		// Read the audio header size
+		unsigned long HeaderSize;
+		HeaderSize=Input->ExactReadULong();
+		HeaderSizes.push_back(HeaderSize);
+	}
+
+	// Read the headers and create the layers
+	for(unsigned long i=0;i<NumberLayers;i++)
+	{
+		// Read the header and write it
+		unsigned char* Buffer;
+		Buffer=(unsigned char*)Input->ExactRead(HeaderSizes[i]);
+		if(HeaderSizes[i]>0)
+		{
+			if(i==Layer)
+			{
+				Output.write((char*)Buffer, HeaderSizes[i]);
+			}
+		}
+	}
+
+	// Loop to get all the blocks
+	while(true)
+	{
+		// Check for the end of the file
+		if(Input->IsEnd() || NumberBlocks==0)
+		{
+			break;
+		}
+
+		// Process the first block header
+		unsigned long BlockID;
+		BlockID=Input->ExactReadULong();
+		if(BlockID!=3)
+		{
+			throw(XFileException("Error: Invalid block ID"));
+		}
+		Input->ExactReadULong();
+
+		// Read in the block sizes
+		std::vector<unsigned long> BlockSizes;
+		for(unsigned long i=0;i<NumberLayers;i++)
+		{
+			unsigned long BlockSize;
+			BlockSize=Input->ExactReadULong();
+			BlockSizes.push_back(BlockSize);
+		}
+
+		// Go through each of the layers
+		for(unsigned long i=0;i<NumberLayers;i++)
+		{
+			// Read
+			void* Buffer;
+			Buffer=Input->ExactRead(BlockSizes[i]);
+			if(i==Layer)
+			{
+				Output.write((char*)Buffer, BlockSizes[i]);
+			}
+		}
+		NumberBlocks--;
+	}
 	return true;
 }
 

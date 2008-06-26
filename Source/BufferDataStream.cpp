@@ -1,7 +1,7 @@
 // BufferDataStream.cpp : A data stream from buffers
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "BufferDataStream.h"
 #include "DataExceptions.h"
 

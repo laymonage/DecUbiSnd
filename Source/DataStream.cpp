@@ -1,7 +1,7 @@
 // DataStream.cpp : A data stream
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "DataStream.h"
 #include "DataExceptions.h"
 
@@ -9,7 +9,9 @@ CDataStream::CDataStream() :
 	m_ReadBuffer(NULL),
 	m_ReadBufferLength(0),
 	m_CurrentOffset(0),
-	m_Length(-1)
+	m_Length(-1),
+	m_Endian(LittleEndian),
+	m_NeedSwap(false)
 {
 	return;
 }
@@ -268,6 +270,80 @@ unsigned long CDataStream::GetLength() const
 bool CDataStream::IsEnd() const
 {
 	return DoIsEnd();
+}
+
+void CDataStream::SetEndian(EEndian Endian)
+{
+	switch(Endian)
+	{
+		case LittleEndian:
+			m_NeedSwap=false;
+		break;
+		case BigEndian:
+			m_NeedSwap=true;
+		break;
+		default:
+		return;
+	}
+	m_Endian=Endian;
+	return;
+}
+
+CDataStream::EEndian CDataStream::GetEndian() const
+{
+	return m_Endian;
+}
+
+unsigned long CDataStream::ExactReadULong()
+{
+	// Read the value
+	unsigned long Value;
+	ExactRead(&Value, 4);
+
+	// Swap if needed
+	if(m_NeedSwap)
+	{
+		Value=(Value&0xFF000000)>>24 | (Value&0x00FF0000)>>8 | \
+			(Value&0x000000FF)<<24 | (Value&0x0000FF00)<<8;
+	}
+	return Value;
+}
+
+long CDataStream::ExactReadLong()
+{
+	return static_cast<long>(ExactReadULong());
+}
+
+unsigned short CDataStream::ExactReadUShort()
+{
+	// Read the value
+	unsigned short Value;
+	ExactRead(&Value, 2);
+
+	// Swap if needed
+	if(m_NeedSwap)
+	{
+		Value=(Value&0xFF00)>>8 | (Value&0x00FF)<<8;
+	}
+	return Value;
+}
+
+short CDataStream::ExactReadShort()
+{
+	return static_cast<short>(ExactReadUShort());
+}
+
+unsigned char CDataStream::ExactReadUChar()
+{
+	// Read the value
+	unsigned char Value;
+	ExactRead(&Value, 1);
+	return Value;
+}
+
+char CDataStream::ExactReadChar()
+{
+	return static_cast<char>(ExactReadUChar());
 }
 
 unsigned long CDataStream::DoPeek(void* Buffer, unsigned long Length, bool Exact)

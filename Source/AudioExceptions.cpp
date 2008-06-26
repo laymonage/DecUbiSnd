@@ -1,7 +1,7 @@
 // AudioExceptions.cpp : Audio stream exceptions
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "AudioExceptions.h"
 
 // A general audio exception

@@ -36,6 +36,7 @@ public:
 	virtual std::string GetFormatName() const;
 	virtual unsigned long GetTotalBytes() const;
 	virtual unsigned long GetLayerCount() const;
+	static bool LayerExtract(CDataStream* Input, unsigned long Layer, std::ostream& Output);
 
 private:
 	static void BufferCallback(CBufferDataStream& Stream, unsigned long Bytes, void* UserData);

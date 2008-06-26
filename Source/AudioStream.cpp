@@ -1,7 +1,7 @@
 // AudioStream.cpp : Audio stream decoding abstract class
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "AudioStream.h"
 
 struct CAudioStream::SParamDef

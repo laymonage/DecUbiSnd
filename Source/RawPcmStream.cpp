@@ -1,7 +1,7 @@
 // RawPcmStream.cpp : Raw 16-bit audio stream decoding
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "RawPcmStream.h"
 #include "DataStream.h"
 #include "AudioExceptions.h"

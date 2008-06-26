@@ -1,7 +1,7 @@
 // StreamHelper.cpp : Contains some helper functions for streams
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "DataExceptions.h"
 #include "StreamHelper.h"
 #include "DataStream.h"
@@ -19,8 +19,9 @@ CStreamHelper::CStreamHelper(CDataStream* Input) :
 
 CStreamHelper::~CStreamHelper()
 {
-	// This frees the buffer
-	PrepareOutputBuffer(0);
+	delete[] m_OutputBuffer;
+	m_OutputBuffer=NULL;
+	m_OutputBufferLength=0;
 	return;
 }
 

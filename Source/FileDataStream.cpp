@@ -1,7 +1,7 @@
 // FileDataStream.cpp : A data stream from a file
 //
 
-#include "stdafx.h"
+#include "Pch.h"
 #include "FileDataStream.h"
 #include "DataExceptions.h"
 
