@@ -241,6 +241,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				unsigned char Char[28];
 				bool ChunkValid=false;
 				bool BigEndian=false;
+				unsigned char Variant=0;
 
 				// Read in the characters
 				Input.seekg(ChunkStart);
@@ -272,13 +273,27 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				// Get some information
 				unsigned long NumberLayers=*((unsigned long*)(Char+8));
 				unsigned long NumberBuffers=*((unsigned long*)(Char+12));
+				std::streamsize OffsetToHeaders=*((unsigned long*)(Char+16));
 				std::streamsize HeaderSkip=*((unsigned long*)(Char+20));
 
 				if(BigEndian)
 				{
 					NumberLayers=SwapLong(NumberLayers);
 					NumberBuffers=SwapLong(NumberBuffers);
+					OffsetToHeaders=SwapLong(OffsetToHeaders);
 					HeaderSkip=SwapLong(HeaderSkip);
+				}
+
+				if(OffsetToHeaders!=NumberLayers*4+8)
+				{
+					Variant=1;
+					NumberBuffers=OffsetToHeaders;
+					Input.seekg(44, std::ios_base::cur);
+					Input.read((char*)&HeaderSkip, 4);
+					if(BigEndian)
+					{
+						HeaderSkip=SwapLong(HeaderSkip);
+					}
 				}
 
 				// Verify the information
@@ -300,12 +315,35 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 						unsigned long Signature;
 						std::streamsize TotalBytes=0;
 
-						Input.read((char*)&Signature, 4);
-						if(BigEndian)
+						if(Variant==0)
 						{
-							Signature=SwapLong(Signature);
+							Input.read((char*)&Signature, 4);
+							if(BigEndian)
+							{
+								Signature=SwapLong(Signature);
+							}
+							Input.seekg(4, std::ios_base::cur);
 						}
-						Input.seekg(4, std::ios_base::cur);
+						else if(Variant==1)
+						{
+							Input.read((char*)&Signature, 4);
+							if(BigEndian)
+							{
+								Signature=SwapLong(Signature);
+							}
+							Input.seekg(4, std::ios_base::cur);
+							if(Signature!=i+1)
+							{
+								ChunkValid=false;
+								break;
+							}
+							Input.read((char*)&Signature, 4);
+							if(BigEndian)
+							{
+								Signature=SwapLong(Signature);
+							}
+						}
+
 						for(unsigned long j=0;j<NumberLayers;j++)
 						{
 							unsigned long Size;

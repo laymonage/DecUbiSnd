@@ -24,10 +24,11 @@ struct CInterleavedStream::SInterleavedLayer
 
 CInterleavedStream::CInterleavedStream(CDataStream* Input) :
 	CLayeredStreamHelper(Input),
-	m_NumberBlocks(0),
+	m_Variant(EV_A),
+	m_BlockNumber(0),
+	m_TotalBlocks(0),
 	m_SampleRate(48000),
-	m_Channels(2),
-	m_TotalBlocks(0)
+	m_Channels(2)
 {
 	DoRegisterParams();
 	return;
@@ -82,15 +83,33 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 		throw(XFileException("File does not have the correct signature (should be 08)"));
 	}
 
-	// Read the first header
+	// Read a bit of the first header
 	unsigned long NumberLayers;
+	unsigned long BytesUntilHeader;
 	m_InputStream->ExactIgnore(4);
 	NumberLayers=m_InputStream->ExactReadULong();
 	m_TotalBlocks=m_InputStream->ExactReadULong();
-	m_InputStream->ExactIgnore(4);
-	m_InputStream->ExactIgnore(4);
-	m_InputStream->ExactIgnore(4);
-	m_NumberBlocks=m_TotalBlocks;
+	m_BlockNumber=0;
+	BytesUntilHeader=m_InputStream->ExactReadULong();
+
+	// Check if this file is a different variant
+	if(BytesUntilHeader==NumberLayers*4+8)
+	{
+		m_Variant=EV_A;
+
+		m_InputStream->ExactIgnore(4);
+		m_InputStream->ExactIgnore(4);
+	}
+	else
+	{
+		m_Variant=EV_B;
+		m_TotalBlocks=BytesUntilHeader;
+
+		m_InputStream->ExactIgnore(4);
+		m_InputStream->ExactIgnore(4);
+		m_InputStream->ExactIgnore(44);
+		m_InputStream->ExactIgnore(4);
+	}
 
 	// Process the second header
 	std::vector<unsigned long> HeaderSizes;
@@ -309,7 +328,7 @@ bool CInterleavedStream::DoDecodeLayer(unsigned long LayerIndex)
 bool CInterleavedStream::DoReadBlock()
 {
 	// Check for the end of the file
-	if(m_InputStream->IsEnd() || m_NumberBlocks==0)
+	if(m_InputStream->IsEnd() || m_BlockNumber==m_TotalBlocks)
 	{
 		// Mark the end of the stream for all of the layers
 		for(unsigned long i=0;i<m_Layers.size();i++)
@@ -321,13 +340,31 @@ bool CInterleavedStream::DoReadBlock()
 	}
 
 	// Process the first block header
-	unsigned long BlockID;
-	BlockID=m_InputStream->ExactReadULong();
-	if(BlockID!=3)
+	if(m_Variant==EV_A)
 	{
-		throw(XFileException("Error: Invalid block ID"));
+		unsigned long BlockID;
+		BlockID=m_InputStream->ExactReadULong();
+		if(BlockID!=3)
+		{
+			throw(XFileException("Error: Invalid block ID"));
+		}
+		m_InputStream->ExactReadULong();
 	}
-	m_InputStream->ExactReadULong();
+	else if(m_Variant==EV_B)
+	{
+		unsigned long BlockID;
+		BlockID=m_InputStream->ExactReadULong();
+		if(BlockID!=m_BlockNumber+1)
+		{
+			throw(XFileException("Error: Invalid block ID"));
+		}
+		m_InputStream->ExactReadULong();
+		BlockID=m_InputStream->ExactReadULong();
+		if(BlockID!=3)
+		{
+			throw(XFileException("Error: Invalid block ID"));
+		}
+	}
 
 	// Read in the block sizes
 	std::vector<unsigned long> BlockSizes;
@@ -350,7 +387,7 @@ bool CInterleavedStream::DoReadBlock()
 		Buffer=m_InputStream->ExactRead(BlockSizes[i]);
 		Layer.Data->SendBuffer(Buffer, BlockSizes[i]);
 	}
-	m_NumberBlocks--;
+	m_BlockNumber++;
 	return true;
 }
 
@@ -378,15 +415,36 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 		throw(XFileException("File does not have the correct signature (should be 08)"));
 	}
 
-	// Read the first header
+	// Read a bit of the first header
 	unsigned long NumberLayers;
-	unsigned long NumberBlocks;
+	unsigned long BytesUntilHeader;
+	unsigned long TotalBlocks;
+	unsigned long BlockNumber;
+	CInterleavedStream::EVariant Variant;
 	Input->ExactIgnore(4);
 	NumberLayers=Input->ExactReadULong();
-	NumberBlocks=Input->ExactReadULong();
-	Input->ExactIgnore(4);
-	Input->ExactIgnore(4);
-	Input->ExactIgnore(4);
+	TotalBlocks=Input->ExactReadULong();
+	BlockNumber=0;
+	BytesUntilHeader=Input->ExactReadULong();
+
+	// Check if this file is a different variant
+	if(BytesUntilHeader==NumberLayers*4+8)
+	{
+		Variant=CInterleavedStream::EV_A;
+
+		Input->ExactIgnore(4);
+		Input->ExactIgnore(4);
+	}
+	else
+	{
+		Variant=CInterleavedStream::EV_B;
+		TotalBlocks=BytesUntilHeader;
+
+		Input->ExactIgnore(4);
+		Input->ExactIgnore(4);
+		Input->ExactIgnore(44);
+		Input->ExactIgnore(4);
+	}
 
 	// Process the second header
 	std::vector<unsigned long> HeaderSizes;
@@ -417,19 +475,37 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 	while(true)
 	{
 		// Check for the end of the file
-		if(Input->IsEnd() || NumberBlocks==0)
+		if(Input->IsEnd() || BlockNumber==TotalBlocks)
 		{
 			break;
 		}
 
 		// Process the first block header
-		unsigned long BlockID;
-		BlockID=Input->ExactReadULong();
-		if(BlockID!=3)
+		if(Variant==EV_A)
 		{
-			throw(XFileException("Error: Invalid block ID"));
+			unsigned long BlockID;
+			BlockID=Input->ExactReadULong();
+			if(BlockID!=3)
+			{
+				throw(XFileException("Error: Invalid block ID"));
+			}
+			Input->ExactReadULong();
 		}
-		Input->ExactReadULong();
+		else if(Variant==EV_B)
+		{
+			unsigned long BlockID;
+			BlockID=Input->ExactReadULong();
+			if(BlockID!=BlockNumber+1)
+			{
+				throw(XFileException("Error: Invalid block ID"));
+			}
+			Input->ExactReadULong();
+			BlockID=Input->ExactReadULong();
+			if(BlockID!=3)
+			{
+				throw(XFileException("Error: Invalid block ID"));
+			}
+		}
 
 		// Read in the block sizes
 		std::vector<unsigned long> BlockSizes;
@@ -451,7 +527,7 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 				Output.write((char*)Buffer, BlockSizes[i]);
 			}
 		}
-		NumberBlocks--;
+		BlockNumber++;
 	}
 	return true;
 }
