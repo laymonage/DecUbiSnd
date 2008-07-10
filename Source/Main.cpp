@@ -1012,7 +1012,7 @@ int LayerExtract(SArguments& Args)
 				std::cerr << "Error extracting layers" << std::endl;
 			}
 		}
-		if(Type==EUF_UBI_IV2)
+		else if(Type==EUF_UBI_IV2)
 		{
 			if(!COldInterleavedStream::LayerExtract(&FileStream, Layer, Output))
 			{
