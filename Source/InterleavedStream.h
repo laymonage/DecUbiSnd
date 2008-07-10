@@ -17,15 +17,22 @@ public:
 		AT_OGGVORBIS
 	};
 
+	enum EVariant
+	{
+		EV_A,
+		EV_B
+	};
+
 protected:
 	struct SInterleavedLayer;
 
 protected:
-	unsigned long m_NumberBlocks;
+	EVariant m_Variant;
+	unsigned long m_BlockNumber;
+	unsigned long m_TotalBlocks;
 	std::vector<SInterleavedLayer*> m_Layers;
 	unsigned long m_SampleRate;
 	unsigned char m_Channels;
-	unsigned long m_TotalBlocks;
 
 protected:
 	virtual bool DoDecodeLayer(unsigned long LayerIndex);
