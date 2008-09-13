@@ -389,6 +389,10 @@ int Decode(SArguments& Args)
 			{
 				Type=EUF_UBI_IV8;
 			}
+			else if(Signature[0]==7 && Signature[1]==0)
+			{
+				Type=EUF_UBI_IV8;
+			}
 			else if(Signature[3]==8 && Signature[2]==0)
 			{
 				Type=EUF_UBI_IV8;
@@ -969,6 +973,10 @@ int LayerExtract(SArguments& Args)
 		{
 			Type=EUF_UBI_IV8;
 		}
+		else if(Signature[0]==7 && Signature[1]==0)
+		{
+			Type=EUF_UBI_IV8;
+		}
 		else if(Signature[3]==8 && Signature[2]==0)
 		{
 			Type=EUF_UBI_IV8;
@@ -995,48 +1003,56 @@ int LayerExtract(SArguments& Args)
 	unsigned long Layer;
 	if(Args.InputLayers.size()!=1)
 	{
-		std::cerr << "You must specify one layer" << std::cerr;
-		Input.close();
-		Output.close();
-		return 100;
+		// Do a generic copy
+		while(!FileStream.IsEnd())
+		{
+			unsigned long Read=65536;
+			char* Buffer;
+			Buffer=(char*)FileStream.Read(Read);
+			Output.write(Buffer, Read);
+		}
 	}
-	Layer=Args.InputLayers[0];
+	else
+	{
+		// Set the layer
+		Layer=Args.InputLayers[0];
 
-	// Do the layer extract
-	try
-	{
-		if(Type==EUF_UBI_IV8)
+		// Do the layer extract
+		try
 		{
-			if(!CInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+			if(Type==EUF_UBI_IV8)
 			{
-				std::cerr << "Error extracting layers" << std::endl;
+				if(!CInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+				{
+					std::cerr << "Error extracting layers" << std::endl;
+				}
+			}
+			else if(Type==EUF_UBI_IV2)
+			{
+				if(!COldInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+				{
+					std::cerr << "Error extracting layers" << std::endl;
+				}
+			}
+			else
+			{
+				std::cerr << "This format cannot be layer extracted" << std::endl;
 			}
 		}
-		else if(Type==EUF_UBI_IV2)
+		catch(XDataException& e)
 		{
-			if(!COldInterleavedStream::LayerExtract(&FileStream, Layer, Output))
-			{
-				std::cerr << "Error extracting layers" << std::endl;
-			}
+			std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
+			std::cerr << e.GetMessage() << std::endl;
 		}
-		else
+		catch(XAudioException& e)
 		{
-			std::cerr << "This format cannot be layer extracted" << std::endl;
+			std::cerr << e.GetFriendlyMessage() << std::endl;
+			std::cerr << "Details: " << e.GetMessage() << std::endl;
 		}
-	}
-	catch(XDataException& e)
-	{
-		std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
-		std::cerr << e.GetMessage() << std::endl;
-	}
-	catch(XAudioException& e)
-	{
-		std::cerr << e.GetFriendlyMessage() << std::endl;
-		std::cerr << "Details: " << e.GetMessage() << std::endl;
-	}
-	catch(...)
-	{
-		std::cerr << "Unspecified error" << std::endl;
+		catch(...)
+		{
+			std::cerr << "Unspecified error" << std::endl;
+		}
 	}
 
 	// Finish up
@@ -1128,5 +1144,5 @@ int _tmain(int Argc, _TCHAR* Argv[])
 			ReturnValue=LayerExtract(Args);
 		break;
 	}
-	return 0;
+	return ReturnValue;
 }

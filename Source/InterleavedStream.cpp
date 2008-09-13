@@ -78,6 +78,10 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 	{
 		m_InputStream->SetEndian(CDataStream::BigEndian);
 	}
+	else if(Type==7)
+	{
+		m_InputStream->SetEndian(CDataStream::LittleEndian);
+	}
 	else
 	{
 		throw(XFileException("File does not have the correct signature (should be 08)"));
@@ -93,7 +97,17 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 	BytesUntilHeader=m_InputStream->ExactReadULong();
 
 	// Check if this file is a different variant
-	if(BytesUntilHeader==NumberLayers*4+8)
+	if(Type==7)
+	{
+		m_Variant=EV_C;
+		m_TotalBlocks=BytesUntilHeader;
+
+		m_InputStream->ExactIgnore(4);
+		m_InputStream->ExactIgnore(4);
+		m_InputStream->ExactIgnore(32);
+		m_InputStream->ExactIgnore(4);
+	}
+	else if(BytesUntilHeader==NumberLayers*4+8)
 	{
 		m_Variant=EV_A;
 
@@ -350,7 +364,7 @@ bool CInterleavedStream::DoReadBlock()
 		}
 		m_InputStream->ExactReadULong();
 	}
-	else if(m_Variant==EV_B)
+	else if(m_Variant==EV_B || m_Variant==EV_C)
 	{
 		unsigned long BlockID;
 		BlockID=m_InputStream->ExactReadULong();
@@ -406,6 +420,10 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 	{
 		Input->SetEndian(CDataStream::LittleEndian);
 	}
+	else if(Type==7)
+	{
+		Input->SetEndian(CDataStream::LittleEndian);
+	}
 	else if(SubType==0x0800)
 	{
 		Input->SetEndian(CDataStream::BigEndian);
@@ -428,7 +446,17 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 	BytesUntilHeader=Input->ExactReadULong();
 
 	// Check if this file is a different variant
-	if(BytesUntilHeader==NumberLayers*4+8)
+	if(Type==7)
+	{
+		Variant=CInterleavedStream::EV_C;
+		TotalBlocks=BytesUntilHeader;
+
+		Input->ExactIgnore(4);
+		Input->ExactIgnore(4);
+		Input->ExactIgnore(32);
+		Input->ExactIgnore(4);
+	}
+	else if(BytesUntilHeader==NumberLayers*4+8)
 	{
 		Variant=CInterleavedStream::EV_A;
 
@@ -491,7 +519,7 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 			}
 			Input->ExactReadULong();
 		}
-		else if(Variant==EV_B)
+		else if(Variant==EV_B || Variant==EV_C)
 		{
 			unsigned long BlockID;
 			BlockID=Input->ExactReadULong();
