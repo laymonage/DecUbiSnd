@@ -235,7 +235,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				Input.seekg((std::streamoff)(OffsetReset));
 				FullSize=0;
 			}
-			else if(Buffer[i]==8)
+			else if(Buffer[i]==8 || Buffer[i]==7)
 			{
 				// Some assumptions
 				unsigned char Char[28];
@@ -248,11 +248,16 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				Input.read((char*)Char, 28);
 
 				// Check the characters
-				if(Char[0]==8 && Char[1]==0 && Char[3]==0 && \
+				if((Char[0]==8 || Char[0]==7) && Char[1]==0 && Char[3]==0 && \
 					Char[9]==0 && Char[10]==0 && Char[11]==0)
 				{
 					ChunkValid=true;
 					BigEndian=false;
+
+					if(Char[0]==7)
+					{
+						Variant=2;
+					}
 				}
 				else if(ChunkStart>=3)
 				{
@@ -262,11 +267,16 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 					Input.read((char*)Char, 28);
 
 					// Now check the characters
-					if(Char[3]==8 && Char[2]==0 && Char[0]==0 && \
+					if((Char[3]==8 || Char[3]==7) && Char[2]==0 && Char[0]==0 && \
 						Char[8]==0 && Char[9]==0 && Char[10]==0)
 					{
 						ChunkValid=true;
 						BigEndian=true;
+
+						if(Char[3]==7)
+						{
+							Variant=2;
+						}
 					}
 				}
 
@@ -284,7 +294,17 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 					HeaderSkip=SwapLong(HeaderSkip);
 				}
 
-				if(OffsetToHeaders!=NumberLayers*4+8)
+				if(Variant==2)
+				{
+					NumberBuffers=OffsetToHeaders;
+					Input.seekg(32, std::ios_base::cur);
+					Input.read((char*)&HeaderSkip, 4);
+					if(BigEndian)
+					{
+						HeaderSkip=SwapLong(HeaderSkip);
+					}
+				}
+				else if(OffsetToHeaders!=NumberLayers*4+8)
 				{
 					Variant=1;
 					NumberBuffers=OffsetToHeaders;
@@ -324,7 +344,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 							}
 							Input.seekg(4, std::ios_base::cur);
 						}
-						else if(Variant==1)
+						else if(Variant==1 || Variant==2)
 						{
 							Input.read((char*)&Signature, 4);
 							if(BigEndian)

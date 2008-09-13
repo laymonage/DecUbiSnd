@@ -20,7 +20,8 @@ public:
 	enum EVariant
 	{
 		EV_A,
-		EV_B
+		EV_B,
+		EV_C
 	};
 
 protected:
