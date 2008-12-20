@@ -34,7 +34,12 @@ static bool CheckOggChunk(std::istream& Input, std::streamsize& FullSize)
 		unsigned long HeaderSize=0;
 		unsigned long PageSize=0;
 
+		memset(Header, 0, 27);
 		Input.read((char*)Header, 27);
+		if(memcmp(Header, "OggS", 4)!=0)
+		{
+			break;
+		}
 		HeaderSize=27+Header[26];
 		Segments=new unsigned char[Header[26]];
 		Input.read((char*)Segments, Header[26]);
@@ -322,6 +327,10 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 					ChunkValid=false;
 				}
 				if(NumberLayers==0)
+				{
+					ChunkValid=false;
+				}
+				if(NumberBuffers<1)
 				{
 					ChunkValid=false;
 				}
