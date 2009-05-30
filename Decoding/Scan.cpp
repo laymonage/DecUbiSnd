@@ -257,7 +257,80 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 				Input.seekg((std::streamoff)(OffsetReset));
 				FullSize=0;
 			}
-			else if(Buffer[i]==8 || Buffer[i]==7)
+			else if(Buffer[i]==8)
+			{
+				// Some assumptions
+				unsigned char Char[48];
+				bool ChunkValid=false;
+
+				// Read in the characters
+				Input.seekg(ChunkStart);
+				Input.read((char*)Char, 48);
+
+				// Check the characters
+				if(Char[0]==8 && Char[1]==0 && Char[2]==0 && \
+					Char[3]==0 && Char[37]==0 && Char[38]==0 && \
+					Char[39]==0 && (Char[36]==4 || Char[36]==6) && \
+					Char[45]==0 && Char[46]==0 && Char[47]==0 && \
+					(Char[44]==1 || Char[44]==2))
+				{
+					ChunkValid=true;
+				}
+
+				// Walk the blocks
+				if(ChunkValid)
+				{
+					char BlockHeader[52];
+					std::streamoff LastValidOffset;
+					bool Done=false;
+					bool FoundABlock=false;
+					while(!Input.eof())
+					{
+						for(unsigned long i=0;i<Char[44];i++)
+						{
+							Input.read(BlockHeader, 52);
+							if(BlockHeader[0]!=2 || BlockHeader[1]!=0 || \
+								BlockHeader[2]!=0 || BlockHeader[3]!=0)
+							{
+								Done=true;
+								break;
+							}
+						}
+						Input.seekg(Char[36]*384+2, std::ios_base::cur);
+						if(Done)
+						{
+							break;
+						}
+						LastValidOffset=Input.tellg();
+						FoundABlock=true;
+					}
+
+					if(!FoundABlock)
+					{
+						ChunkValid=false;
+					}
+					else
+					{
+						//FullSize=LastValidOffset-ChunkStart;
+					}
+				}
+
+				// If the chunk is valid
+				if(ChunkValid)
+				{
+					// The file is valid so far, so return success
+					Input.clear();
+					Input.seekg(ChunkStart);
+					BytesRead=ChunkStart-StartOffset;
+					delete [] Buffer;
+					return true;
+				}
+
+				// If this was just a false alarm
+				Input.seekg((std::streamoff)(OffsetReset));
+				FullSize=0;
+			}
+			if(Buffer[i]==8 || Buffer[i]==7)
 			{
 				// Some assumptions
 				unsigned char Char[28];

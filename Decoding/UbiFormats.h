@@ -7,7 +7,7 @@ inline EUbiFormat StringToUbiFormat(const std::string& String)
 {
 	if(String=="ubi_v3")
 	{
-		return EUF_UBI_V5;
+		return EUF_UBI_V3;
 	}
 	else if(String=="ubi_v5")
 	{
@@ -20,6 +20,10 @@ inline EUbiFormat StringToUbiFormat(const std::string& String)
 	else if(String=="ubi_iv8")
 	{
 		return EUF_UBI_IV8;
+	}
+	else if(String=="ubi_6or4")
+	{
+		return EUF_UBI_6OR4;
 	}
 	else if(String=="ubi_raw")
 	{
