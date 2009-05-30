@@ -12,6 +12,7 @@
 #include "Decoding/Version5Stream.h"
 #include "Decoding/InterleavedStream.h"
 #include "Decoding/OldInterleavedStream.h"
+#include "Decoding/Old6Or4BitStream.h"
 #include "Decoding/OggVorbisStream.h"
 #include "Decoding/RawCompressedStream.h"
 #include "Decoding/RawPcmStream.h"
@@ -309,6 +310,29 @@ bool NDecFunc::CSegmentStream::InitializeAudioSegment(CSegment& Segment)
 			}
 			Stream->SetCurrentLayers(Segment.GetLayers());
 
+			if(!Stream->InitializeHeader(Segment.GetSampleRate()))
+			{
+				// TODO: Better error handling
+				ReleaseAudioSegment();
+				return false;
+			}
+		}
+		// TODO: Better error handling
+		catch(...)
+		{
+			// TODO: Better error handling
+			ReleaseAudioSegment();
+			return false;
+		}
+	}
+	else if(Segment.GetType()==EUF_UBI_6OR4)
+	{
+		COld6Or4BitStream* Stream=new COld6Or4BitStream(m_InputStream);
+		m_AudioStream=Stream;
+
+		// Try to initialize the header
+		try
+		{
 			if(!Stream->InitializeHeader(Segment.GetSampleRate()))
 			{
 				// TODO: Better error handling

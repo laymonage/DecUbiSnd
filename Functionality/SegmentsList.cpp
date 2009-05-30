@@ -14,6 +14,7 @@
 #include "Decoding/Version5Stream.h"
 #include "Decoding/InterleavedStream.h"
 #include "Decoding/OldInterleavedStream.h"
+#include "Decoding/Old6Or4BitStream.h"
 #include "Decoding/OggVorbisStream.h"
 #include "Decoding/RawCompressedStream.h"
 #include "Decoding/RawPcmStream.h"
@@ -123,6 +124,44 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 	{
 		Segment->SetType(EUF_UBI_IV2);
 	}
+	else if(Signature[0]==8 && Signature[1]==0 && Signature[2]==0 && \
+		Signature[3]==0)
+	{
+		// Try a version 8 interleaved stream first
+		CFileDataStream FileStream(&Input, Segment->GetOffset(), Segment->GetSize());
+		CInterleavedStream Stream(&FileStream);
+		try
+		{
+			std::vector<unsigned long> Layers;
+			Layers.push_back(1);
+			Stream.SetCurrentLayers(Layers);
+
+			// Initialize
+			if(!Stream.InitializeHeader())
+			{
+				// Not a version 8 so must be a 6-Or-4
+				Segment->SetType(EUF_UBI_6OR4);
+			}
+			else
+			{
+				short Buffer[1024];
+				unsigned long NumberSamples=1024;
+				if(Stream.Decode(Buffer, NumberSamples))
+				{
+					Segment->SetType(EUF_UBI_IV8);
+				}
+				else
+				{
+					Segment->SetType(EUF_UBI_6OR4);
+				}
+			}
+		}
+		catch(...)
+		{
+			// Not a version 8 so must be a 6-Or-4
+			Segment->SetType(EUF_UBI_6OR4);
+		}
+	}
 	else if(Signature[0]==8 && Signature[1]==0)
 	{
 		Segment->SetType(EUF_UBI_IV8);
@@ -228,6 +267,29 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 		{
 			// TODO: Better error handling
 			return NULL;
+		}
+	}
+	else if(Segment->GetType()==EUF_UBI_6OR4)
+	{
+		COld6Or4BitStream Stream(&InputStream);
+
+		// Try to initialize the header
+		try
+		{
+			if(!Stream.InitializeHeader())
+			{
+				// TODO: Better error handling
+				return NULL;
+			}
+			Segment->SetSampleRate(Stream.GetSampleRate());
+			Segment->SetChannels(Stream.GetChannels());
+		}
+		// TODO: Better error handling
+		catch(...)
+		{
+			// It's okay to let these ones slip through
+			Segment->SetSampleRate(Stream.GetSampleRate());
+			Segment->SetChannels(Stream.GetChannels());
 		}
 	}
 	else if(Segment->GetType()==EUF_OGG)

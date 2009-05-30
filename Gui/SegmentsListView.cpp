@@ -58,6 +58,8 @@ static wxString UbiFormatToString(EUbiFormat Format)
 		return wxT("Old Interleaved Stream");
 		case EUF_UBI_IV8:
 		return wxT("Interleaved Stream");
+		case EUF_UBI_6OR4:
+		return wxT("Old 6-Or-4 Bit Stream");
 		case EUF_UBI_RAW:
 		return wxT("Raw UbiSoft ADPCM");
 		case EUF_RAW:
