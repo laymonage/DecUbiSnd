@@ -1,0 +1,52 @@
+// Old6Or4BitStream.h : UbiSoft Old 6-Or-4 Bit audio stream (XIII and SC1 PC) decoding
+//
+
+#pragma once
+#include "StreamHelper.h"
+
+//class CBufferDataStream;
+
+// Provides UbiSoft Old 6-Or-4 Bit audio stream decoding
+class COld6Or4BitStream : public CStreamHelper
+{
+protected:
+	// TODO: pragma pack?
+	struct SFileHeader
+	{
+		unsigned long Signature;
+		unsigned long SampleCount;
+		unsigned long Unknown1;
+		unsigned long Unknown2;
+		unsigned long Unknown3;
+		unsigned long Unknown4;
+		unsigned long SampleRate; // Maybe
+		unsigned long Unknown5;
+		unsigned long Unknown6;
+		unsigned long BitsPerSample;
+		unsigned long Unknown7;
+		unsigned long Channels;
+	};
+
+protected:
+	SFileHeader m_Header;
+	unsigned long m_SampleRate;
+	unsigned char m_Channels;
+	unsigned long m_ByteBlockSize;
+	unsigned long m_SamplesLeft;
+	unsigned long* m_ExpandedBuffer;
+
+protected:
+	virtual bool DoDecodeBlock();
+
+public:
+	COld6Or4BitStream(CDataStream* Input);
+	virtual ~COld6Or4BitStream();
+
+	virtual bool InitializeHeader();
+	virtual bool InitializeHeader(unsigned long SampleRate);
+	virtual unsigned long GetSampleRate() const;
+	virtual unsigned char GetChannels() const;
+	virtual std::string GetFormatName() const;
+	virtual unsigned char GetBitsPerSample() const;
+
+};

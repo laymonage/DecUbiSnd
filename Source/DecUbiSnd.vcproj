@@ -117,6 +117,9 @@
 			Filter="cpp;c;cxx;def;odl;idl;hpj;bat;asm;asmx"
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}">
 			<File
+				RelativePath=".\6BitAdpcm.cpp">
+			</File>
+			<File
 				RelativePath=".\ADPCM.cpp">
 			</File>
 			<File
@@ -148,6 +151,9 @@
 			</File>
 			<File
 				RelativePath=".\OggVorbisStream.cpp">
+			</File>
+			<File
+				RelativePath=".\Old6Or4BitStream.cpp">
 			</File>
 			<File
 				RelativePath=".\OldInterleavedStream.cpp">
@@ -197,6 +203,9 @@
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}">
 			<File
+				RelativePath=".\6BitAdpcm.h">
+			</File>
+			<File
 				RelativePath=".\ADPCM.h">
 			</File>
 			<File
@@ -225,6 +234,9 @@
 			</File>
 			<File
 				RelativePath=".\OggVorbisStream.h">
+			</File>
+			<File
+				RelativePath=".\Old6Or4BitStream.h">
 			</File>
 			<File
 				RelativePath=".\OldInterleavedStream.h">
