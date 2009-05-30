@@ -385,6 +385,44 @@ int Decode(SArguments& Args)
 			{
 				Type=EUF_UBI_IV2;
 			}
+			else if(Signature[0]==8 && Signature[1]==0 && Signature[2]==0 && \
+				Signature[3]==0)
+			{
+				// Try a version 8 interleaved stream first
+				CFileDataStream FileStream(&Input, Segment.GetOffset(), Segment.GetSize());
+				CInterleavedStream Stream(&FileStream);
+				try
+				{
+					std::vector<unsigned long> Layers;
+					Layers.push_back(1);
+					Stream.SetCurrentLayers(Layers);
+
+					// Initialize
+					if(!Stream.InitializeHeader(SampleRate, Args.InputChannels))
+					{
+						// Not a version 8 so must be a 6-Or-4
+						Type=EUF_UBI_6OR4;
+					}
+					else
+					{
+						short Buffer[1024];
+						unsigned long NumberSamples=1024;
+						if(Stream.Decode(Buffer, NumberSamples))
+						{
+							Type=EUF_UBI_IV8;
+						}
+						else
+						{
+							Type=EUF_UBI_6OR4;
+						}
+					}
+				}
+				catch(...)
+				{
+					// Not a version 8 so must be a 6-Or-4
+					Type=EUF_UBI_6OR4;
+				}
+			}
 			else if(Signature[0]==8 && Signature[1]==0)
 			{
 				Type=EUF_UBI_IV8;
@@ -650,6 +688,55 @@ int Decode(SArguments& Args)
 			SampleRate=Stream.GetSampleRate();
 			BitsPerSample=16;
 			Channels=Stream.GetChannels();
+			NumberSamples+=LocalNumberSamples;
+		}
+		else if(Type==EUF_UBI_6OR4)
+		{
+			// Decode the stream
+			COld6Or4BitStream Stream(&FileStream);
+			try
+			{
+				// Initialize
+				if(!Stream.InitializeHeader())
+				{
+					std::cerr << "Problems initializing the header." << std::endl;
+					continue;
+				}
+
+				// Show info
+				if(Args.ShowInfo)
+				{
+					std::cout << "Type: Old 6-Or-4 Bit" << std::endl;
+					std::cout << "Offset: " << Segment.GetOffset() << std::endl;
+					std::cout << "Channels: " << (int)Stream.GetChannels() << std::endl;
+					std::cout << "Sample Rate: " << Stream.GetSampleRate() << std::endl;
+					std::cout << "Bits Per Sample: " << Stream.GetBitsPerSample() << std::endl;
+					std::cout << std::endl;
+				}
+
+				// Decode
+				if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+				{
+					std::cerr << "Problems decompressing the input file." << std::endl;
+				}
+
+				// Set the information
+				SampleRate=Stream.GetSampleRate();
+				Channels=Stream.GetChannels();
+			}
+			catch(XDataException& e)
+			{
+				std::cerr << "Error: " << e.GetFriendlyMessage() << std::endl;
+				std::cerr << e.GetMessage() << std::endl;
+			}
+			catch(XAudioException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
+			}
+
+			// Set the information
+			BitsPerSample=16;
 			NumberSamples+=LocalNumberSamples;
 		}
 		else if(Type==EUF_OGG)
@@ -1117,6 +1204,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  ubi_v5     Simple chunk (version 5)" << std::endl;
 		std::cout << "  ubi_iv2    Old interleaved chunk (version 2)" << std::endl;
 		std::cout << "  ubi_iv8    Interleaved chunk (version 8)" << std::endl;
+		std::cout << "  ubi_6or4   Old UbiSoft 6-Or-4 bit chunk (XIII, SC1 PC)" << std::endl;
 		std::cout << "  ubi_raw    Raw compressed UbiSoft ADPCM" << std::endl;
 		std::cout << "  raw        Raw 16-bit uncompressed" << std::endl;
 		std::cout << "  ogg        Ogg Vorbis" << std::endl;
