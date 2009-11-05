@@ -79,11 +79,6 @@ bool COld6Or4BitStream::InitializeHeader(unsigned long SampleRate)
 	}
 	m_Channels=(unsigned char)m_Header.Channels;
 
-	if(m_Header.Channels==1 && m_Header.BitsPerSample==4)
-	{
-		throw(XFileException("DecUbiSnd is currently unable to decode mono 4-bit files"));
-	}
-
 	// Allocate an expanded buffer
 	m_SamplesLeft=m_Header.SampleCount;
 	m_ByteBlockSize=m_Header.BitsPerSample*384;
@@ -95,6 +90,7 @@ bool COld6Or4BitStream::InitializeHeader(unsigned long SampleRate)
 	{
 		m_ExpandedBuffer=new unsigned long[Get4BitAdpcmSamples(m_ByteBlockSize)];
 	}
+	m_PersistHeader.Signature=0;
 	m_Initialized=true;
 	return true;
 }
@@ -201,6 +197,7 @@ bool COld6Or4BitStream::DoDecodeBlock()
 
 		if(m_Channels==1)
 		{
+			/*
 			// Read the headers
 			S4BitAdpcmBlockHeader Header;
 			if(m_InputStream->Read(&Header, sizeof(Header))<sizeof(Header))
@@ -213,6 +210,34 @@ bool COld6Or4BitStream::DoDecodeBlock()
 				m_OutputBufferUsed=0;
 				return true;
 			}
+			*/
+			if(m_PersistHeader.Signature!=2)
+			{
+				if(m_InputStream->Read(&m_PersistHeader, sizeof(m_PersistHeader))<sizeof(m_PersistHeader))
+				{
+					m_OutputBufferUsed=0;
+					return true;
+				}
+				if(m_PersistHeader.Signature!=2)
+				{
+					m_OutputBufferUsed=0;
+					return true;
+				}
+			}
+			else
+			{
+				S4BitAdpcmBlockHeader Header;
+				if(m_InputStream->Read(&Header, sizeof(Header))<sizeof(Header))
+				{
+					m_OutputBufferUsed=0;
+					return true;
+				}
+				if(Header.Signature!=2)
+				{
+					m_OutputBufferUsed=0;
+					return true;
+				}
+			}
 
 			// Decode the first half of the block
 			unsigned long Length;
@@ -221,7 +246,7 @@ bool COld6Or4BitStream::DoDecodeBlock()
 			Buffer=m_InputStream->Read(Length);
 			m_InputStream->Ignore(1);
 			Expand4BitAdpcmBlock(Buffer, m_ExpandedBuffer, SampleCount/2);
-			DecompressMono4BitAdpcmBlock(Header, m_ExpandedBuffer, \
+			DecompressMono4BitAdpcmBlock(m_PersistHeader, m_ExpandedBuffer, \
 				m_OutputBuffer, SampleCount/2);
 
 			// Decode the second half of the block
@@ -229,7 +254,7 @@ bool COld6Or4BitStream::DoDecodeBlock()
 			Buffer=m_InputStream->Read(Length);
 			m_InputStream->Ignore(1);
 			Expand4BitAdpcmBlock(Buffer, m_ExpandedBuffer, SampleCount/2);
-			DecompressMono4BitAdpcmBlock(Header, m_ExpandedBuffer, \
+			DecompressMono4BitAdpcmBlock(m_PersistHeader, m_ExpandedBuffer, \
 				m_OutputBuffer+(SampleCount/2), SampleCount/2);
 		}
 		else if(m_Channels==2)
