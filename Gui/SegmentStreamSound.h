@@ -19,6 +19,7 @@ namespace NDecGui
 	protected:
 		NDecFunc::CSegmentStream& m_Stream;
 		bool m_Looping;
+		unsigned long m_ExtraSamples;
 		wxFFileInputStream m_File; // TODO: Delete
 
 	protected:
