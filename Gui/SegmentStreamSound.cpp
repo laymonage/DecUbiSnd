@@ -19,7 +19,8 @@ NDecGui::CSegmentStreamSound::CSegmentStreamSound(NDecFunc::CSegmentStream& Stre
 	m_File(wxGetApp().GetTraits()->GetStandardPaths().GetExecutablePath(), wxT("rb")),
 	wxSoundFileStream(m_File, IoStream),
 	m_Stream(Stream),
-	m_Looping(false)
+	m_Looping(false),
+	m_ExtraSamples(0)
 {
 	return;
 }
@@ -73,6 +74,7 @@ bool NDecGui::CSegmentStreamSound::PrepareToPlay()
 		return false;
 	}
 
+	m_ExtraSamples=Segment->GetSampleRate()*Segment->GetChannels();
 	FinishPreparation(GetBestSize());
 	return true;
 }
@@ -119,6 +121,26 @@ wxUint32 NDecGui::CSegmentStreamSound::GetData(void *Buffer, wxUint32 Size)
 			return SamplesDecoded*2;
 		}
 		SamplesDecoded+=NewDecoded;
+	}
+
+	// Check to see if we need to add any extra samples
+	if(SamplesDecoded<SampleToDecode && m_ExtraSamples)
+	{
+		unsigned long RequestedSamples;
+		RequestedSamples=SampleToDecode-SamplesDecoded;
+
+		if(m_ExtraSamples>RequestedSamples)
+		{
+			memset((char*)Buffer+(SamplesDecoded*2), 0, RequestedSamples*2);
+			SamplesDecoded+=RequestedSamples;
+			m_ExtraSamples-=RequestedSamples;
+		}
+		else
+		{
+			memset((char*)Buffer+(SamplesDecoded*2), 0, m_ExtraSamples*2);
+			SamplesDecoded+=m_ExtraSamples;
+			m_ExtraSamples=0;
+		}
 	}
 
 	// Just a little hack
