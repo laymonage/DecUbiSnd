@@ -4,6 +4,8 @@
 #pragma once
 #include "StreamHelper.h"
 
+#include "6BitAdpcm.h"
+
 //class CBufferDataStream;
 
 // Provides UbiSoft Old 6-Or-4 Bit audio stream decoding
@@ -34,6 +36,8 @@ protected:
 	unsigned long m_ByteBlockSize;
 	unsigned long m_SamplesLeft;
 	unsigned long* m_ExpandedBuffer;
+
+	S4BitAdpcmBlockHeader m_PersistHeader;
 
 protected:
 	virtual bool DoDecodeBlock();

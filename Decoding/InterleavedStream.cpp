@@ -133,6 +133,10 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 		unsigned long HeaderSize;
 		HeaderSize=m_InputStream->ExactReadULong();
 		HeaderSizes.push_back(HeaderSize);
+		if(HeaderSize>1000000)
+		{
+			throw(XFileException("Header size too big"));
+		}
 	}
 
 	// Read the headers and create the layers
