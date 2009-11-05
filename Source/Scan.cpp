@@ -264,8 +264,9 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				if(ChunkValid)
 				{
 					char BlockHeader[52];
-					std::streamoff LastValidOffset=-1;
+					std::streamoff LastValidOffset;
 					bool Done=false;
+					bool FoundABlock=false;
 					while(!Input.eof())
 					{
 						for(unsigned long i=0;i<Char[44];i++)
@@ -284,9 +285,10 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 							break;
 						}
 						LastValidOffset=Input.tellg();
+						FoundABlock=true;
 					}
 
-					if(LastValidOffset==-1)
+					if(!FoundABlock)
 					{
 						ChunkValid=false;
 					}
@@ -300,6 +302,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
 				if(ChunkValid)
 				{
 					// The file is valid so far, so return success
+					Input.clear();
 					Input.seekg(ChunkStart);
 					BytesRead=ChunkStart-StartOffset;
 					delete [] Buffer;
