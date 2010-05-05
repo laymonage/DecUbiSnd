@@ -7,6 +7,7 @@
 #include "AudioExceptions.h"
 #include "Version5Stream.h"
 #include "InterleavedStream.h"
+#include "Interleaved9Stream.h"
 #include "OldInterleavedStream.h"
 #include "Old6Or4BitStream.h"
 #include "OggVorbisStream.h"
@@ -20,6 +21,7 @@ enum EUbiFormat
 	EUF_UBI_V5,
 	EUF_UBI_IV2,
 	EUF_UBI_IV8,
+	EUF_UBI_IV9,
 	EUF_UBI_6OR4,
 	EUF_UBI_RAW,
 	EUF_RAW,
@@ -43,6 +45,10 @@ inline EUbiFormat StringToUbiFormat(const std::string& String)
 	else if(String=="ubi_iv8")
 	{
 		return EUF_UBI_IV8;
+	}
+	else if(String=="ubi_iv9")
+	{
+		return EUF_UBI_IV9;
 	}
 	else if(String=="ubi_6or4")
 	{

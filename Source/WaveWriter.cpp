@@ -10,13 +10,13 @@ struct SWaveFmtChunk
 	SWaveFmtChunk()
 	{
 		memset(this, 0, sizeof(SWaveFmtChunk));
-	};
-	short FormatTag;
-	short Channels;
-	long SampleRate;
-	long BytesPerSec;
-	short BlockAlign;
-	short BitsPerSample;
+        }
+        uint16_t FormatTag;
+        uint16_t Channels;
+        uint32_t SampleRate;
+        uint32_t BytesPerSec;
+        uint16_t BlockAlign;
+        uint16_t BitsPerSample;
 };
 
 void PrepareWaveHeader(std::ostream& Output)
