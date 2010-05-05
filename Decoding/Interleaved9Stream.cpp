@@ -2,7 +2,7 @@
 //
 
 #include "Pch.h"
-#include "InterleavedStream.h"
+#include "Interleaved9Stream.h"
 #include "Version5Stream.h"
 #include "OggVorbisStream.h"
 #include "BufferDataStream.h"
@@ -10,7 +10,7 @@
 #include "AudioExceptions.h"
 
 // Information associated with each layer
-struct CInterleavedStream::SInterleavedLayer
+struct CInterleaved9Stream::SInterleavedLayer
 {
 	SInterleavedLayer() : Stream(NULL), Data(NULL) {}
 	~SInterleavedLayer() { delete Stream; delete Data; }
@@ -22,7 +22,7 @@ struct CInterleavedStream::SInterleavedLayer
 	unsigned long BlockSize;
 };
 
-CInterleavedStream::CInterleavedStream(CDataStream* Input) :
+CInterleaved9Stream::CInterleaved9Stream(CDataStream* Input) :
 	CLayeredStreamHelper(Input),
 	m_Variant(EV_A),
 	m_BlockNumber(0),
@@ -34,23 +34,23 @@ CInterleavedStream::CInterleavedStream(CDataStream* Input) :
 	return;
 }
 
-CInterleavedStream::~CInterleavedStream()
+CInterleaved9Stream::~CInterleaved9Stream()
 {
 	Clear();
 	return;
 }
 
-bool CInterleavedStream::InitializeHeader()
+bool CInterleaved9Stream::InitializeHeader()
 {
 	return InitializeHeader(0);
 }
 
-bool CInterleavedStream::InitializeHeader(unsigned long SampleRate)
+bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate)
 {
 	return InitializeHeader(SampleRate, 2);
 }
 
-bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned char PcmChannels)
+bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned char PcmChannels)
 {
 	// Check params
 	if(PcmChannels<1)
@@ -70,59 +70,31 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 	}
 	m_InputStream->ExactRead(&Type, 2);
 	m_InputStream->ExactRead(&SubType, 2);
-	if(Type==8)
-	{
-		m_InputStream->SetEndian(CDataStream::LittleEndian);
-	}
-	else if(SubType==0x0800)
-	{
-		m_InputStream->SetEndian(CDataStream::BigEndian);
-	}
-	else if(Type==7)
+	if(Type==9)
 	{
 		m_InputStream->SetEndian(CDataStream::LittleEndian);
 	}
 	else
 	{
-		throw(XFileException("File does not have the correct signature (should be 08)"));
+		throw(XFileException("File does not have the correct signature (should be 09)"));
 	}
 
 	// Read a bit of the first header
 	unsigned long NumberLayers;
-	unsigned long BytesUntilHeader;
+	unsigned long TotalInfoSize;
 	m_InputStream->ExactIgnore(4);
 	NumberLayers=m_InputStream->ExactReadULong();
 	m_TotalBlocks=m_InputStream->ExactReadULong();
 	m_BlockNumber=0;
-	BytesUntilHeader=m_InputStream->ExactReadULong();
+	TotalInfoSize=m_InputStream->ExactReadULong();
 
 	// Check if this file is a different variant
-	if(Type==7)
-	{
-		m_Variant=EV_C;
-		m_TotalBlocks=BytesUntilHeader;
-
-		m_InputStream->ExactIgnore(4);
-		m_InputStream->ExactIgnore(4);
-		m_InputStream->ExactIgnore(32);
-		m_InputStream->ExactIgnore(4);
-	}
-	else if(BytesUntilHeader==NumberLayers*4+8)
+	if(Type==9)
 	{
 		m_Variant=EV_A;
 
-		m_InputStream->ExactIgnore(4);
-		m_InputStream->ExactIgnore(4);
-	}
-	else
-	{
-		m_Variant=EV_B;
-		m_TotalBlocks=BytesUntilHeader;
-
-		m_InputStream->ExactIgnore(4);
-		m_InputStream->ExactIgnore(4);
-		m_InputStream->ExactIgnore(44);
-		m_InputStream->ExactIgnore(4);
+		m_InputStream->ExactIgnore(TotalInfoSize);
+		m_InputStream->ExactIgnore(64 - NumberLayers*4);
 	}
 
 	// Process the second header
@@ -278,7 +250,7 @@ bool CInterleavedStream::InitializeHeader(unsigned long SampleRate, unsigned cha
 	return true;
 }
 
-bool CInterleavedStream::DoDecodeLayer(unsigned long LayerIndex)
+bool CInterleaved9Stream::DoDecodeLayer(unsigned long LayerIndex)
 {
 	// Make sure it's valid
 	if(!m_Initialized)
@@ -343,7 +315,7 @@ bool CInterleavedStream::DoDecodeLayer(unsigned long LayerIndex)
 	return true;
 }
 
-bool CInterleavedStream::DoReadBlock()
+bool CInterleaved9Stream::DoReadBlock()
 {
 	// Check for the end of the file
 	if(m_InputStream->IsEnd() || m_BlockNumber==m_TotalBlocks)
@@ -364,24 +336,16 @@ bool CInterleavedStream::DoReadBlock()
 		BlockID=m_InputStream->ExactReadULong();
 		if(BlockID!=3)
 		{
-			throw(XFileException("Error: Invalid block ID"));
+			// Mark the end of the stream for all of the layers
+			for(unsigned long i=0;i<m_Layers.size();i++)
+			{
+				SInterleavedLayer& Layer=*m_Layers[i];
+				Layer.Data->EndStream();
+			}
+			return false;
+			//throw(XFileException("Error: Invalid block ID"));
 		}
 		m_InputStream->ExactReadULong();
-	}
-	else if(m_Variant==EV_B || m_Variant==EV_C)
-	{
-		unsigned long BlockID;
-		BlockID=m_InputStream->ExactReadULong();
-		if(BlockID!=m_BlockNumber+1)
-		{
-			throw(XFileException("Error: Invalid block ID"));
-		}
-		m_InputStream->ExactReadULong();
-		BlockID=m_InputStream->ExactReadULong();
-		if(BlockID!=3)
-		{
-			throw(XFileException("Error: Invalid block ID"));
-		}
 	}
 
 	// Read in the block sizes
@@ -409,7 +373,7 @@ bool CInterleavedStream::DoReadBlock()
 	return true;
 }
 
-bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, std::ostream& Output)
+bool CInterleaved9Stream::LayerExtract(CDataStream* Input, unsigned long Layer, std::ostream& Output)
 {
 	// Read the type from the file
 	unsigned short Type;
@@ -420,17 +384,9 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 	}
 	Input->ExactRead(&Type, 2);
 	Input->ExactRead(&SubType, 2);
-	if(Type==8)
+	if(Type==9)
 	{
 		Input->SetEndian(CDataStream::LittleEndian);
-	}
-	else if(Type==7)
-	{
-		Input->SetEndian(CDataStream::LittleEndian);
-	}
-	else if(SubType==0x0800)
-	{
-		Input->SetEndian(CDataStream::BigEndian);
 	}
 	else
 	{
@@ -439,43 +395,23 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 
 	// Read a bit of the first header
 	unsigned long NumberLayers;
-	unsigned long BytesUntilHeader;
+	unsigned long TotalInfoSize;
 	unsigned long TotalBlocks;
 	unsigned long BlockNumber;
-	CInterleavedStream::EVariant Variant;
+	CInterleaved9Stream::EVariant Variant;
 	Input->ExactIgnore(4);
 	NumberLayers=Input->ExactReadULong();
 	TotalBlocks=Input->ExactReadULong();
 	BlockNumber=0;
-	BytesUntilHeader=Input->ExactReadULong();
+	TotalInfoSize=Input->ExactReadULong();
 
 	// Check if this file is a different variant
-	if(Type==7)
+	if(Type==9)
 	{
-		Variant=CInterleavedStream::EV_C;
-		TotalBlocks=BytesUntilHeader;
+		Variant=EV_A;
 
-		Input->ExactIgnore(4);
-		Input->ExactIgnore(4);
-		Input->ExactIgnore(32);
-		Input->ExactIgnore(4);
-	}
-	else if(BytesUntilHeader==NumberLayers*4+8)
-	{
-		Variant=CInterleavedStream::EV_A;
-
-		Input->ExactIgnore(4);
-		Input->ExactIgnore(4);
-	}
-	else
-	{
-		Variant=CInterleavedStream::EV_B;
-		TotalBlocks=BytesUntilHeader;
-
-		Input->ExactIgnore(4);
-		Input->ExactIgnore(4);
-		Input->ExactIgnore(44);
-		Input->ExactIgnore(4);
+		Input->ExactIgnore(TotalInfoSize);
+		Input->ExactIgnore(64 - NumberLayers*4);
 	}
 
 	// Process the second header
@@ -523,21 +459,6 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 			}
 			Input->ExactReadULong();
 		}
-		else if(Variant==EV_B || Variant==EV_C)
-		{
-			unsigned long BlockID;
-			BlockID=Input->ExactReadULong();
-			if(BlockID!=BlockNumber+1)
-			{
-				throw(XFileException("Error: Invalid block ID"));
-			}
-			Input->ExactReadULong();
-			BlockID=Input->ExactReadULong();
-			if(BlockID!=3)
-			{
-				throw(XFileException("Error: Invalid block ID"));
-			}
-		}
 
 		// Read in the block sizes
 		std::vector<unsigned long> BlockSizes;
@@ -564,22 +485,22 @@ bool CInterleavedStream::LayerExtract(CDataStream* Input, unsigned long Layer, s
 	return true;
 }
 
-unsigned long CInterleavedStream::GetSampleRate() const
+unsigned long CInterleaved9Stream::GetSampleRate() const
 {
 	return m_SampleRate;
 }
 
-unsigned char CInterleavedStream::GetChannels() const
+unsigned char CInterleaved9Stream::GetChannels() const
 {
 	return m_Channels;
 }
 
-std::string CInterleavedStream::GetFormatName() const
+std::string CInterleaved9Stream::GetFormatName() const
 {
-	return "ubi_iv8";
+	return "ubi_iv9";
 }
 
-CInterleavedStream::EAudioType CInterleavedStream::GetType(unsigned long Layer) const
+CInterleaved9Stream::EAudioType CInterleaved9Stream::GetType(unsigned long Layer) const
 {
 	// Check the state
 	if(Layer<0 || Layer>=m_Layers.size())
@@ -592,23 +513,23 @@ CInterleavedStream::EAudioType CInterleavedStream::GetType(unsigned long Layer) 
 	return LayerRef.Type;
 }
 
-unsigned long CInterleavedStream::GetNumberBlocks() const
+unsigned long CInterleaved9Stream::GetNumberBlocks() const
 {
 	return m_TotalBlocks;
 }
 
-unsigned long CInterleavedStream::GetLayerCount() const
+unsigned long CInterleaved9Stream::GetLayerCount() const
 {
 	return (unsigned long)m_Layers.size();
 }
 
-void CInterleavedStream::DoRegisterParams()
+void CInterleaved9Stream::DoRegisterParams()
 {
 	//RegisterParam("Layer", (TSetLongParamProc)SetLayer, NULL, (TGetLongParamProc)GetLayer, NULL);
 	return;
 }
 
-void CInterleavedStream::Clear()
+void CInterleaved9Stream::Clear()
 {
 	for(std::vector<SInterleavedLayer*>::iterator Iter=m_Layers.begin();Iter!=m_Layers.end();++Iter)
 	{
@@ -621,7 +542,7 @@ void CInterleavedStream::Clear()
 	return;
 }
 
-void CInterleavedStream::BufferCallback(CBufferDataStream& Stream, unsigned long Bytes, void* UserData)
+void CInterleaved9Stream::BufferCallback(CBufferDataStream& Stream, unsigned long Bytes, void* UserData)
 {
 	// Check the user data
 	if(!UserData)
@@ -630,7 +551,7 @@ void CInterleavedStream::BufferCallback(CBufferDataStream& Stream, unsigned long
 	}
 
 	// Get the audio stream class
-	CInterleavedStream& Audio=*(CInterleavedStream*)UserData;
+	CInterleaved9Stream& Audio=*(CInterleaved9Stream*)UserData;
 
 	// Read in as much data as needed
 	while(Stream.GetBufferedLength()<Bytes)

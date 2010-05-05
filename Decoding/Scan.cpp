@@ -196,8 +196,8 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 
 				// Get the full size
 				unsigned long NumberLayers;
-				FullSize=*((unsigned long*)(Char+8))+2;
-				NumberLayers=*((unsigned long*)(Char+4));
+                                FullSize=*((uint32_t*)(Char+8))+2;
+                                NumberLayers=*((uint32_t*)(Char+4));
 
 				// Check the characters
 				if(Char[0]==2 && Char[1]==0 && Char[2]==0 && Char[3]==0 && \
@@ -376,10 +376,10 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 				}
 
 				// Get some information
-				unsigned long NumberLayers=*((unsigned long*)(Char+8));
-				unsigned long NumberBuffers=*((unsigned long*)(Char+12));
-				std::streamsize OffsetToHeaders=*((unsigned long*)(Char+16));
-				std::streamsize HeaderSkip=*((unsigned long*)(Char+20));
+                                unsigned long NumberLayers=*((uint32_t*)(Char+8));
+                                unsigned long NumberBuffers=*((uint32_t*)(Char+12));
+                                std::streamsize OffsetToHeaders=*((uint32_t*)(Char+16));
+                                std::streamsize HeaderSkip=*((uint32_t*)(Char+20));
 
 				if(BigEndian)
 				{
@@ -393,6 +393,7 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 				{
 					NumberBuffers=OffsetToHeaders;
 					Input.seekg(32, std::ios_base::cur);
+					HeaderSkip=0;
 					Input.read((char*)&HeaderSkip, 4);
 					if(BigEndian)
 					{
@@ -404,6 +405,7 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 					Variant=1;
 					NumberBuffers=OffsetToHeaders;
 					Input.seekg(44, std::ios_base::cur);
+                                        HeaderSkip=0;
 					Input.read((char*)&HeaderSkip, 4);
 					if(BigEndian)
 					{
@@ -436,6 +438,7 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 
 						if(Variant==0)
 						{
+                                                        Signature=0;
 							Input.read((char*)&Signature, 4);
 							if(BigEndian)
 							{
@@ -445,7 +448,8 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 						}
 						else if(Variant==1 || Variant==2)
 						{
-							Input.read((char*)&Signature, 4);
+                                                        Signature=0;
+                                                        Input.read((char*)&Signature, 4);
 							if(BigEndian)
 							{
 								Signature=SwapLong(Signature);
@@ -456,6 +460,7 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 								ChunkValid=false;
 								break;
 							}
+                                                        Signature=0;
 							Input.read((char*)&Signature, 4);
 							if(BigEndian)
 							{
@@ -466,6 +471,126 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 						for(unsigned long j=0;j<NumberLayers;j++)
 						{
 							unsigned long Size;
+                                                        Size=0;
+							Input.read((char*)&Size, 4);
+							if(BigEndian)
+							{
+								Size=SwapLong(Size);
+							}
+							TotalBytes+=Size;
+						}
+
+						if(Signature!=3)
+						{
+							ChunkValid=false;
+							break;
+						}
+						if(TotalBytes>=EndOffset-ChunkStart || TotalBytes<(std::streamsize)NumberLayers*4+8)
+						{
+							ChunkValid=false;
+							break;
+						}
+						Input.seekg(TotalBytes, std::ios_base::cur);
+					}
+					FullSize=Input.tellg()-ChunkStart;
+				}
+
+				// If the chunk is valid
+				if(ChunkValid)
+				{
+					// The file is valid so far, so return success
+					Input.seekg(ChunkStart);
+					BytesRead=ChunkStart-StartOffset;
+					delete [] Buffer;
+					return true;
+				}
+
+				// If this was just a false alarm
+				Input.seekg((std::streamoff)(OffsetReset));
+				FullSize=0;
+			}
+			else if(Buffer[i]==9)
+			{
+				// Some assumptions
+				unsigned char Char[20];
+				bool ChunkValid=false;
+				bool BigEndian=false;
+				unsigned char Variant=0;
+
+				// Read in the characters
+				Input.seekg(ChunkStart);
+				Input.read((char*)Char, 20);
+
+				// Check the characters
+				if(Char[0]==9 && Char[1]==0 && Char[2]==16 && Char[3]==0 && \
+					Char[4]==0 && Char[5]==0 && Char[6]==0 && Char[7]==0)
+				{
+					ChunkValid=true;
+					BigEndian=false;
+				}
+
+				// Get some information
+                                unsigned long NumberLayers=*((uint32_t*)(Char+8));
+                                unsigned long NumberBuffers=*((uint32_t*)(Char+12));
+                                std::streamsize TotalInfoSize=*((uint32_t*)(Char+16));
+
+				if(BigEndian)
+				{
+					NumberLayers=SwapLong(NumberLayers);
+					NumberBuffers=SwapLong(NumberBuffers);
+					TotalInfoSize=SwapLong(TotalInfoSize);
+				}
+
+				// Verify the information
+				if(TotalInfoSize>=EndOffset-ChunkStart)
+				{
+					ChunkValid=false;
+				}
+				if(NumberLayers==0)
+				{
+					ChunkValid=false;
+				}
+				if(NumberBuffers<1)
+				{
+					ChunkValid=false;
+				}
+
+				// Walk the blocks
+				if(ChunkValid)
+				{
+					Input.seekg(TotalInfoSize + (64 - NumberLayers*4), std::ios_base::cur);
+					
+					unsigned int HeaderSizes = 0;
+					
+					for(unsigned int i=0;i<NumberLayers;i++)
+					{
+						unsigned int Size = 0;
+						Input.read((char*)&Size, 4);
+						HeaderSizes += Size;
+					}
+					
+					Input.seekg(HeaderSizes, std::ios_base::cur);
+					
+					for(unsigned long i=0;i<NumberBuffers;i++)
+					{
+						unsigned long Signature;
+						std::streamsize TotalBytes=0;
+
+						if(Variant==0)
+						{
+                                                        Signature=0;
+							Input.read((char*)&Signature, 4);
+							if(BigEndian)
+							{
+								Signature=SwapLong(Signature);
+							}
+							Input.seekg(4, std::ios_base::cur);
+						}
+
+						for(unsigned long j=0;j<NumberLayers;j++)
+						{
+							unsigned long Size;
+                                                        Size=0;
 							Input.read((char*)&Size, 4);
 							if(BigEndian)
 							{

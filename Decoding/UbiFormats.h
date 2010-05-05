@@ -21,6 +21,10 @@ inline EUbiFormat StringToUbiFormat(const std::string& String)
 	{
 		return EUF_UBI_IV8;
 	}
+	else if(String=="ubi_iv9")
+	{
+		return EUF_UBI_IV9;
+	}
 	else if(String=="ubi_6or4")
 	{
 		return EUF_UBI_6OR4;
