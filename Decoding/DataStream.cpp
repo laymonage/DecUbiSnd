@@ -297,7 +297,7 @@ CDataStream::EEndian CDataStream::GetEndian() const
 unsigned long CDataStream::ExactReadULong()
 {
 	// Read the value
-	unsigned long Value;
+	unsigned long Value=0;
 	ExactRead(&Value, 4);
 
 	// Swap if needed
@@ -317,7 +317,7 @@ long CDataStream::ExactReadLong()
 unsigned short CDataStream::ExactReadUShort()
 {
 	// Read the value
-	unsigned short Value;
+	unsigned short Value=0;
 	ExactRead(&Value, 2);
 
 	// Swap if needed
@@ -336,7 +336,7 @@ short CDataStream::ExactReadShort()
 unsigned char CDataStream::ExactReadUChar()
 {
 	// Read the value
-	unsigned char Value;
+	unsigned char Value=0;
 	ExactRead(&Value, 1);
 	return Value;
 }

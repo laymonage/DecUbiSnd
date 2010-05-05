@@ -73,7 +73,7 @@ bool CLayeredStreamHelper::IsLayerDecoded(unsigned long LayerIndex) const
 		{
 			return true;
 		}
-	}	
+	}
 	return false;
 }
 
