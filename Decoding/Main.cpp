@@ -427,6 +427,10 @@ int Decode(SArguments& Args)
 			{
 				Type=EUF_UBI_IV8;
 			}
+			else if(Signature[0]==9 && Signature[1]==0)
+			{
+				Type=EUF_UBI_IV9;
+			}
 			else if(Signature[0]==7 && Signature[1]==0)
 			{
 				Type=EUF_UBI_IV8;
@@ -579,6 +583,82 @@ int Decode(SArguments& Args)
 				if(Args.ShowInfo)
 				{
 					std::cout << "Type: Interleaved chunk (version 8)" << std::endl;
+					std::cout << "Offset: " << Segment.GetOffset() << std::endl;
+					std::cout << "Number of Blocks: " << Stream.GetNumberBlocks() << std::endl;
+					std::cout << "Channels: " << (int)Stream.GetChannels() << std::endl;
+					std::cout << "Number of Layers: " << Stream.GetLayerCount() << std::endl;
+					for(unsigned long i=0;i<Stream.GetLayerCount();i++)
+					{
+						std::cout << "Layer " << i+1 << ": ";
+						switch(Stream.GetType(i))
+						{
+							case CInterleavedStream::AT_PCM:
+								std::cout << "Raw 16-bit uncompressed";
+							break;
+							case CInterleavedStream::AT_ADPCM:
+								std::cout << "Simple chunk (version 5)";
+							break;
+							case CInterleavedStream::AT_OGGVORBIS:
+								std::cout << "Ogg Vorbis";
+							break;
+						}
+						std::cout << std::endl;
+					}
+					std::cout << std::endl;
+				}
+
+				// Decode
+				if(!Stream.DecodeToFile(Output, LocalNumberSamples))
+				{
+					std::cerr << "Problems decompressing the input file." << std::endl;
+				}
+			}
+			catch(XDataException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
+			}
+			catch(XAudioException& e)
+			{
+				std::cerr << e.GetFriendlyMessage() << std::endl;
+				std::cerr << "Details: " << e.GetMessage() << std::endl;
+			}
+			catch(...)
+			{
+				std::cerr << "Unspecified error" << std::endl;
+			}
+
+			// Set the information
+			SampleRate=Stream.GetSampleRate();
+			BitsPerSample=16;
+			Channels=Stream.GetChannels();
+			NumberSamples+=LocalNumberSamples;
+		}
+		else if(Type==EUF_UBI_IV9)
+		{
+			// Decode the stream
+			CInterleaved9Stream Stream(&FileStream);
+			try
+			{
+				// Set some arguments
+				if(Args.InputLayers.size()<1)
+				{
+					std::cerr << "You need to specify which layer or layers (comma separated) to decode." << std::endl;
+					continue;
+				}
+				Stream.SetCurrentLayers(Args.InputLayers);
+
+				// Initialize
+				if(!Stream.InitializeHeader(SampleRate, Args.InputChannels))
+				{
+					std::cerr << "Problems initializing the header." << std::endl;
+					continue;
+				}
+
+				// Show info
+				if(Args.ShowInfo)
+				{
+					std::cout << "Type: Interleaved chunk (version 9)" << std::endl;
 					std::cout << "Offset: " << Segment.GetOffset() << std::endl;
 					std::cout << "Number of Blocks: " << Stream.GetNumberBlocks() << std::endl;
 					std::cout << "Channels: " << (int)Stream.GetChannels() << std::endl;
@@ -1064,6 +1144,10 @@ int LayerExtract(SArguments& Args)
 		{
 			Type=EUF_UBI_IV8;
 		}
+		else if(Signature[0]==9 && Signature[1]==0)
+		{
+			Type=EUF_UBI_IV9;
+		}
 		else if(Signature[3]==8 && Signature[2]==0)
 		{
 			Type=EUF_UBI_IV8;
@@ -1110,6 +1194,13 @@ int LayerExtract(SArguments& Args)
 			if(Type==EUF_UBI_IV8)
 			{
 				if(!CInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+				{
+					std::cerr << "Error extracting layers" << std::endl;
+				}
+			}
+			else if(Type==EUF_UBI_IV9)
+			{
+				if(!CInterleaved9Stream::LayerExtract(&FileStream, Layer, Output))
 				{
 					std::cerr << "Error extracting layers" << std::endl;
 				}
@@ -1204,6 +1295,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  ubi_v5     Simple chunk (version 5)" << std::endl;
 		std::cout << "  ubi_iv2    Old interleaved chunk (version 2)" << std::endl;
 		std::cout << "  ubi_iv8    Interleaved chunk (version 8)" << std::endl;
+		std::cout << "  ubi_iv9    Interleaved chunk (version 9)" << std::endl;
 		std::cout << "  ubi_6or4   Old UbiSoft 6-Or-4 bit chunk (XIII, SC1 PC)" << std::endl;
 		std::cout << "  ubi_raw    Raw compressed UbiSoft ADPCM" << std::endl;
 		std::cout << "  raw        Raw 16-bit uncompressed" << std::endl;
