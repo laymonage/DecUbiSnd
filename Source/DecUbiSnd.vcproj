@@ -141,6 +141,9 @@
 				RelativePath=".\FileDataStream.cpp">
 			</File>
 			<File
+				RelativePath=".\Interleaved9Stream.cpp">
+			</File>
+			<File
 				RelativePath=".\InterleavedStream.cpp">
 			</File>
 			<File
@@ -225,6 +228,9 @@
 			</File>
 			<File
 				RelativePath=".\FileDataStream.h">
+			</File>
+			<File
+				RelativePath=".\Interleaved9Stream.h">
 			</File>
 			<File
 				RelativePath=".\InterleavedStream.h">
