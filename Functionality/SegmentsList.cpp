@@ -13,6 +13,7 @@
 #include "Decoding/FileDataStream.h"
 #include "Decoding/Version5Stream.h"
 #include "Decoding/InterleavedStream.h"
+#include "Decoding/Interleaved9Stream.h"
 #include "Decoding/OldInterleavedStream.h"
 #include "Decoding/Old6Or4BitStream.h"
 #include "Decoding/OggVorbisStream.h"
@@ -166,6 +167,10 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 	{
 		Segment->SetType(EUF_UBI_IV8);
 	}
+	else if(Signature[0]==9 && Signature[1]==0)
+	{
+		Segment->SetType(EUF_UBI_IV9);
+	}
 	else if(Signature[0]==7 && Signature[1]==0)
 	{
 		Segment->SetType(EUF_UBI_IV8);
@@ -215,6 +220,37 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 	{
 		// Decode the stream
 		CInterleavedStream Stream(&InputStream);
+
+		// Try to initialize the header
+		try
+		{
+			if(Segment->GetChannels()==0)
+			{
+				Segment->SetChannels(2);
+			}
+			if(!Stream.InitializeHeader(Segment->GetSampleRate(), Segment->GetChannels()))
+			{
+				// TODO: Better error handling
+				return NULL;
+			}
+			Segment->SetSampleRate(Stream.GetSampleRate());
+			Segment->SetChannels(Stream.GetChannels());
+			for(unsigned long i=0;i<Stream.GetLayerCount();i++)
+			{
+				Segment->GetLayers().push_back(i);
+			}
+		}
+		// TODO: Better error handling
+		catch(...)
+		{
+			// TODO: Better error handling
+			return NULL;
+		}
+	}
+	else if(Segment->GetType()==EUF_UBI_IV9)
+	{
+		// Decode the stream
+		CInterleaved9Stream Stream(&InputStream);
 
 		// Try to initialize the header
 		try
@@ -477,7 +513,8 @@ bool NDecFunc::CSegmentsList::CanMix(const std::vector<unsigned long>& Indicies)
 
 		// Make sure it's an interleaved stream
 		CSegment& Segment=*at(Index);
-		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8)
+		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8 && \
+			Segment.GetType()!=EUF_UBI_IV9)
 		{
 			continue;
 		}
@@ -518,7 +555,8 @@ bool NDecFunc::CSegmentsList::CanUnmix(const std::vector<unsigned long>& Indicie
 
 		// Make sure it's an interleaved stream
 		CSegment& Segment=*at(Index);
-		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8)
+		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8 && \
+			Segment.GetType()!=EUF_UBI_IV9)
 		{
 			continue;
 		}
@@ -553,7 +591,8 @@ void NDecFunc::CSegmentsList::Mix(const std::vector<unsigned long>& Indicies)
 
 		// Make sure it's an interleaved stream
 		CSegment& Segment=*at(Index);
-		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8)
+		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8 && \
+			Segment.GetType()!=EUF_UBI_IV9)
 		{
 			continue;
 		}
@@ -637,7 +676,8 @@ void NDecFunc::CSegmentsList::Unmix(const std::vector<unsigned long>& Indicies)
 
 		// Make sure it's an interleaved stream
 		CSegment& Segment=*at(Index);
-		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8)
+		if(Segment.GetType()!=EUF_UBI_IV2 && Segment.GetType()!=EUF_UBI_IV8 && \
+			Segment.GetType()!=EUF_UBI_IV9)
 		{
 			continue;
 		}

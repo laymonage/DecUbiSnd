@@ -11,6 +11,7 @@
 #include "Decoding/FileDataStream.h"
 #include "Decoding/Version5Stream.h"
 #include "Decoding/InterleavedStream.h"
+#include "Decoding/Interleaved9Stream.h"
 #include "Decoding/OldInterleavedStream.h"
 #include "Decoding/Old6Or4BitStream.h"
 #include "Decoding/OggVorbisStream.h"
@@ -265,6 +266,38 @@ bool NDecFunc::CSegmentStream::InitializeAudioSegment(CSegment& Segment)
 	{
 		// Decode the stream
 		CInterleavedStream* Stream=new CInterleavedStream(m_InputStream);
+		m_AudioStream=Stream;
+
+		// Try to initialize the header
+		try
+		{
+			if(Segment.GetLayers().size()<1)
+			{
+				// TODO: Better error handling
+				ReleaseAudioSegment();
+				return false;
+			}
+			Stream->SetCurrentLayers(Segment.GetLayers());
+
+			if(!Stream->InitializeHeader(Segment.GetSampleRate(), Segment.GetChannels()))
+			{
+				// TODO: Better error handling
+				ReleaseAudioSegment();
+				return false;
+			}
+		}
+		// TODO: Better error handling
+		catch(...)
+		{
+			// TODO: Better error handling
+			ReleaseAudioSegment();
+			return false;
+		}
+	}
+	else if(Segment.GetType()==EUF_UBI_IV9)
+	{
+		// Decode the stream
+		CInterleaved9Stream* Stream=new CInterleaved9Stream(m_InputStream);
 		m_AudioStream=Stream;
 
 		// Try to initialize the header

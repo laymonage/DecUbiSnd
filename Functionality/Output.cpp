@@ -15,6 +15,7 @@
 #include "Decoding/FileDataStream.h"
 #include "Decoding/Version5Stream.h"
 #include "Decoding/InterleavedStream.h"
+#include "Decoding/Interleaved9Stream.h"
 #include "Decoding/OldInterleavedStream.h"
 #include "Decoding/OggVorbisStream.h"
 #include "Decoding/RawCompressedStream.h"
@@ -243,7 +244,7 @@ bool NDecFunc::OutputLayerExtract(const std::string DirName, const std::vector<C
 
 		// Get the layer
 		unsigned long Layer;
-		if(Type!=EUF_UBI_IV2 && Type!=EUF_UBI_IV8)
+		if(Type!=EUF_UBI_IV2 && Type!=EUF_UBI_IV8 && Type!=EUF_UBI_IV9)
 		{
 			// Do a generic copy
 			while(!FileStream.IsEnd())
@@ -265,6 +266,13 @@ bool NDecFunc::OutputLayerExtract(const std::string DirName, const std::vector<C
 				if(Type==EUF_UBI_IV8)
 				{
 					if(!CInterleavedStream::LayerExtract(&FileStream, Layer, Output))
+					{
+						return false;
+					}
+				}
+				else if(Type==EUF_UBI_IV9)
+				{
+					if(!CInterleaved9Stream::LayerExtract(&FileStream, Layer, Output))
 					{
 						return false;
 					}
