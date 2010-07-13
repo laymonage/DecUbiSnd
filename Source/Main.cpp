@@ -7,6 +7,7 @@
 #include "Scan.h"
 #include "SegmentParser.h"
 #include "WaveWriter.h"
+#include "Version.h"
 
 // The action to be taken
 enum EAction
@@ -431,6 +432,10 @@ int Decode(SArguments& Args)
 			{
 				Type=EUF_UBI_IV9;
 			}
+			else if(Signature[3]==9 && Signature[2]==0)
+                        {
+                                Type=EUF_UBI_IV9;
+                        }
 			else if(Signature[0]==7 && Signature[1]==0)
 			{
 				Type=EUF_UBI_IV8;
@@ -1148,6 +1153,10 @@ int LayerExtract(SArguments& Args)
 		{
 			Type=EUF_UBI_IV9;
 		}
+		else if(Signature[3]==9 && Signature[2]==0)
+                {
+                        Type=EUF_UBI_IV9;
+                }
 		else if(Signature[3]==8 && Signature[2]==0)
 		{
 			Type=EUF_UBI_IV8;
@@ -1252,7 +1261,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 	// Display banner
 	if(Args.ShowBanner)
 	{
-		std::cerr << "Sound/Music Decoder for UBISOFT Formats" << std::endl << std::endl;
+		std::cerr << "Sound/Music Decoder for UBISOFT Formats version " << DECUBISND_VERSION << std::endl << std::endl;
 	}
 
 	// Display usage
