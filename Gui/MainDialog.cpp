@@ -21,6 +21,7 @@
 #include "Functionality/Output.h"
 #include "Sound/Player.h"
 #include "Sound/Stream.h"
+#include "Version.h"
 
 // CMainDialog Event Table
 IMPLEMENT_CLASS(NDecGui::CMainDialog, wxDialog)
@@ -59,7 +60,7 @@ END_EVENT_TABLE()
 
 // CMainDialog Implementation
 NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wxSize& Size) :
-	wxDialog(Parent, wxID_ANY, _("Decode UbiSoft Sounds/Music"), Pos, Size, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER|wxMAXIMIZE_BOX|wxMINIMIZE_BOX|wxTHICK_FRAME),
+	wxDialog(Parent, wxID_ANY, _("Decode UbiSoft Sounds/Music version " DECUBISND_VERSION), Pos, Size, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER|wxMAXIMIZE_BOX|wxMINIMIZE_BOX|wxTHICK_FRAME),
 	m_FilesList(NULL),
 	m_Update(0),
 	m_NoMagic(false),
