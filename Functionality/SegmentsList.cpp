@@ -171,6 +171,10 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 	{
 		Segment->SetType(EUF_UBI_IV9);
 	}
+	else if(Signature[3]==9 && Signature[2]==0)
+        {
+                Segment->SetType(EUF_UBI_IV9);
+        }
 	else if(Signature[0]==7 && Signature[1]==0)
 	{
 		Segment->SetType(EUF_UBI_IV8);
