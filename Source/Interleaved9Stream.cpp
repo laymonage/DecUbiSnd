@@ -74,6 +74,10 @@ bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned ch
 	{
 		m_InputStream->SetEndian(CDataStream::LittleEndian);
 	}
+	else if(SubType==0x0900)
+        {
+                m_InputStream->SetEndian(CDataStream::BigEndian);
+        }
 	else
 	{
 		throw(XFileException("File does not have the correct signature (should be 09)"));
@@ -89,7 +93,7 @@ bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned ch
 	TotalInfoSize=m_InputStream->ExactReadULong();
 
 	// Check if this file is a different variant
-	if(Type==9)
+	if(Type==9 || SubType==0x0900)
 	{
 		m_Variant=EV_A;
 
@@ -388,6 +392,10 @@ bool CInterleaved9Stream::LayerExtract(CDataStream* Input, unsigned long Layer, 
 	{
 		Input->SetEndian(CDataStream::LittleEndian);
 	}
+	else if(SubType==0x0900)
+        {
+                Input->SetEndian(CDataStream::BigEndian);
+        }
 	else
 	{
 		throw(XFileException("File does not have the correct signature (should be 08)"));
@@ -406,7 +414,7 @@ bool CInterleaved9Stream::LayerExtract(CDataStream* Input, unsigned long Layer, 
 	TotalInfoSize=Input->ExactReadULong();
 
 	// Check if this file is a different variant
-	if(Type==9)
+	if(Type==9 || SubType==0x0900)
 	{
 		Variant=EV_A;
 
