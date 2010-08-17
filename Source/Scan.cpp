@@ -616,7 +616,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
                                 ChunkValid=false;
                                 break;
                             }
-                            if (TotalBytes>=EndOffset-ChunkStart || TotalBytes<(std::streamsize)NumberLayers*4+8)
+                            if (TotalBytes>=EndOffset-ChunkStart)
                             {
                                 ChunkValid=false;
                                 break;
