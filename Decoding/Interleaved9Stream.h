@@ -3,6 +3,7 @@
 
 #pragma once
 #include "LayeredStreamHelper.h"
+#include "UbiFormats.h"
 
 class CBufferDataStream;
 
@@ -10,13 +11,6 @@ class CBufferDataStream;
 class CInterleaved9Stream : public CLayeredStreamHelper
 {
 public:
-	enum EAudioType
-	{
-		AT_PCM,
-		AT_ADPCM,
-		AT_OGGVORBIS
-	};
-
 	enum EVariant
 	{
 		EV_A
@@ -49,7 +43,7 @@ public:
 	virtual unsigned long GetSampleRate() const;
 	virtual unsigned char GetChannels() const;
 	virtual std::string GetFormatName() const;
-	virtual EAudioType GetType(unsigned long Layer) const;
+	virtual EUbiFormat GetType(unsigned long Layer) const;
 	virtual unsigned long GetNumberBlocks() const;
 	virtual unsigned long GetLayerCount() const;
 	static bool LayerExtract(CDataStream* Input, unsigned long Layer, std::ostream& Output);

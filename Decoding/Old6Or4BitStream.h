@@ -15,18 +15,18 @@ protected:
 	// TODO: pragma pack?
 	struct SFileHeader
 	{
-		unsigned long Signature;
-		unsigned long SampleCount;
-		unsigned long Unknown1;
-		unsigned long Unknown2;
-		unsigned long Unknown3;
-		unsigned long Unknown4;
-		unsigned long SampleRate; // Maybe
-		unsigned long Unknown5;
-		unsigned long Unknown6;
-		unsigned long BitsPerSample;
-		unsigned long Unknown7;
-		unsigned long Channels;
+		uint32_t Signature;
+		uint32_t SampleCount;
+		uint32_t Unknown1;
+		uint32_t Unknown2;
+		uint32_t BlockSize;
+		uint32_t Unknown4;
+		uint32_t SampleRate; // Maybe
+		uint32_t Unknown5;
+		uint32_t Unknown6;
+		uint32_t BitsPerSample;
+		uint32_t Unknown7;
+		uint32_t Channels;
 	};
 
 protected:

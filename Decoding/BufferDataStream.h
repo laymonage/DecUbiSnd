@@ -22,6 +22,7 @@ protected:
 
 protected:
 	virtual unsigned long DoRead(void* Buffer, unsigned long Length, bool Exact);
+	virtual unsigned long DoPeek(void* Buffer, unsigned long Length, bool Exact);
 	virtual bool DoCanSeekBackward() const;
 	virtual unsigned long DoForwardSeek(unsigned long RelOffset);
 	virtual bool DoIsEnd() const;
