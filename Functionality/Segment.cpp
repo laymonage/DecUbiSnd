@@ -43,6 +43,7 @@ NDecFunc::CSegment::CSegment(const CSegment& Object) :
 	m_Channels(Object.m_Channels),
 	m_SampleRate(Object.m_SampleRate),
 	m_Layers(Object.m_Layers),
+	m_LayerTypes(Object.m_LayerTypes),
 	m_ListView(Object.m_ListView),
 	m_ListViewIndex(Object.m_ListViewIndex)
 {
@@ -128,6 +129,16 @@ std::vector<unsigned long>& NDecFunc::CSegment::GetLayers()
 const std::vector<unsigned long>& NDecFunc::CSegment::GetLayers() const
 {
 	return m_Layers;
+}
+
+std::vector<EUbiFormat>& NDecFunc::CSegment::GetLayerTypes()
+{
+	return m_LayerTypes;
+}
+
+const std::vector<EUbiFormat>& NDecFunc::CSegment::GetLayerTypes() const
+{
+	return m_LayerTypes;
 }
 
 void NDecFunc::CSegment::SetListView(NDecGui::CSegmentsListView* ListView)

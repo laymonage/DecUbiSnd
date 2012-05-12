@@ -5,7 +5,7 @@
 #include "Pch.h"
 
 #include <wx/filename.h>
-#include <wx/mmedia/sndwin.h>
+#include <algorithm>
 
 #include "Gui/App.h"
 #include "Gui/MainDialog.h"
@@ -13,14 +13,11 @@
 #include "Gui/SegmentsListView.h"
 #include "Gui/AddManuallyDialog.h"
 #include "Gui/SetInfoDialog.h"
-#include "Gui/SegmentStreamSound.h"
 #include "Functionality/FilesList.h"
 #include "Functionality/SegmentsList.h"
 #include "Functionality/Segment.h"
 #include "Functionality/SegmentStream.h"
 #include "Functionality/Output.h"
-#include "Sound/Player.h"
-#include "Sound/Stream.h"
 #include "Version.h"
 
 // CMainDialog Event Table
@@ -46,9 +43,11 @@ BEGIN_EVENT_TABLE(NDecGui::CMainDialog, wxDialog)
 	EVT_BUTTON(ID_PlayButton, NDecGui::CMainDialog::OnPlayButtonClicked)
 	EVT_BUTTON(ID_LoopButton, NDecGui::CMainDialog::OnLoopButtonClicked)
 	EVT_BUTTON(ID_StopButton, NDecGui::CMainDialog::OnStopButtonClicked)
-	EVT_BUTTON(ID_ConcatenatedButton, NDecGui::CMainDialog::OnConcatenatedButtonClicked)
-	EVT_BUTTON(ID_SeparateButton, NDecGui::CMainDialog::OnSeparateButtonClicked)
-	EVT_BUTTON(ID_LayerExtractButton, OnLayerExtractButtonClicked)
+
+	EVT_BUTTON(ID_SaveAsButton, NDecGui::CMainDialog::OnSaveAsButtonClicked)
+	EVT_BUTTON(ID_SaveToWavButton, NDecGui::CMainDialog::OnSaveToWavButtonClicked)
+	EVT_BUTTON(ID_SpliceToWavButton, NDecGui::CMainDialog::OnSpliceToWavButtonClicked)
+	EVT_BUTTON(ID_ExtractAsButton, NDecGui::CMainDialog::OnExtractAsButtonClicked)
 
 	EVT_LIST_ITEM_SELECTED(ID_FileList, NDecGui::CMainDialog::OnFileListSelChange)
 	EVT_LIST_ITEM_DESELECTED(ID_FileList, NDecGui::CMainDialog::OnFileListSelChange)
@@ -56,6 +55,7 @@ BEGIN_EVENT_TABLE(NDecGui::CMainDialog, wxDialog)
 	EVT_LIST_ITEM_SELECTED(ID_SegmentList, NDecGui::CMainDialog::OnSegmentListSelChange)
 	EVT_LIST_ITEM_DESELECTED(ID_SegmentList, NDecGui::CMainDialog::OnSegmentListSelChange)
 	EVT_LIST_ITEM_FOCUSED(ID_SegmentList, NDecGui::CMainDialog::OnSegmentListSelChange)
+	EVT_LIST_ITEM_ACTIVATED(ID_SegmentList, NDecGui::CMainDialog::OnSegmentListItemActivated)
 END_EVENT_TABLE()
 
 // CMainDialog Implementation
@@ -64,57 +64,70 @@ NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wx
 	m_FilesList(NULL),
 	m_Update(0),
 	m_NoMagic(false),
-	m_Playback(NULL),
-	m_Stream(NULL),
-	m_Sound(NULL),
-	m_SoundUpdate(this)
+	m_Player(this, wxID_ANY)
 {
 	// Create the controls
-	m_SelectionSizer_staticbox = new wxStaticBox(this, -1, wxT("Selection"));
-	m_EditSizer_staticbox = new wxStaticBox(this, -1, wxT("Edit"));
-	m_LayersSizer_staticbox = new wxStaticBox(this, -1, wxT("Layers"));
-	m_PlaySizer_staticbox = new wxStaticBox(this, -1, wxT("Play"));
-	m_OutputSizer_staticbox = new wxStaticBox(this, -1, wxT("Output"));
-	m_InputSizer_staticbox = new wxStaticBox(this, -1, wxT("Input"));
+	SelectionSizer_staticbox = new wxStaticBox(this, -1, wxT("Selection"));
+	EditSizer_staticbox = new wxStaticBox(this, -1, wxT("Edit"));
+	LayersSizer_staticbox = new wxStaticBox(this, -1, wxT("Layers"));
+	PlaySizer_staticbox = new wxStaticBox(this, -1, wxT("Play"));
+	OutputSizer_staticbox = new wxStaticBox(this, -1, wxT("Output"));
+	InputSizer_staticbox = new wxStaticBox(this, -1, wxT("Input"));
 	m_ScanDirectoryButton = new wxButton(this, ID_ScanDirectoryButton, wxT("Scan &Directory..."));
 	m_ScanFileButton = new wxButton(this, ID_ScanFileButton, wxT("Scan &File..."));
 	m_AddManuallyButton = new wxButton(this, ID_AddManuallyButton, wxT("Add &Manually..."));
+	m_LoadBankMapButton = new wxButton(this, ID_LoadBankButton, wxT("L&oad Bank/Map..."));
 	m_ClearButton = new wxButton(this, ID_ClearButton, wxT("&Clear"));
-	m_NextButton = new wxButton(this, ID_NextButton, wxT("Nex&t"));
 	m_SelectAllButton = new wxButton(this, ID_SelectAllButton, wxT("Select &All"));
 	m_SelectNoneButton = new wxButton(this, ID_SelectNoneButton, wxT("Select &None"));
 	m_SelectAllFilesButton = new wxButton(this, ID_SelectAllFilesButton, wxT("Select All F&iles"));
-	m_DuplicateButton = new wxButton(this, ID_DuplicateButton, wxT("Dup&licate"));
+	m_DuplicateButton = new wxButton(this, ID_DuplicateButton, wxT("&Duplicate"));
 	m_RemoveButton = new wxButton(this, ID_RemoveButton, wxT("&Remove"));
-	m_SetInfoButton = new wxButton(this, ID_SetInfoButton, wxT("Set I&nfo..."));
+	m_SetInfoButton = new wxButton(this, ID_SetInfoButton, wxT("Set &Info..."));
 	m_MixLayersButton = new wxButton(this, ID_MixLayersButton, wxT("Mi&x Layers"));
 	m_UnmixLayersButton = new wxButton(this, ID_UnmixLayersButton, wxT("&Unmix Layers"));
 	m_PlayButton = new wxButton(this, ID_PlayButton, wxT("&Play"));
-	m_LoopButton = new wxButton(this, ID_LoopButton, wxT("L&oop"));
+	m_LoopButton = new wxButton(this, ID_LoopButton, wxT("&Loop"));
 	m_StopButton = new wxButton(this, ID_StopButton, wxT("&Stop"));
-	m_PlayLabel = new wxStaticText(this, ID_PlayLabel, wxT("m:ss"), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE|wxST_NO_AUTORESIZE);
-	m_ConcatenatedButton = new wxButton(this, ID_ConcatenatedButton, wxT("&Concatenated..."));
-	m_SeparateButton = new wxButton(this, ID_SeparateButton, wxT("S&eparate..."));
-	m_LayerExtractButton = new wxButton(this, ID_LayerExtractButton, wxT("Layer Ex&tract..."));
-	m_FileList = new CFilesListView(this, ID_FileList, wxDefaultPosition, wxDefaultSize);
-	m_SegmentList = new CSegmentsListView(this, ID_SegmentList, wxDefaultPosition, wxDefaultSize);
+	m_PlayLabel = new wxStaticText(this, wxID_ANY, wxT("m:ss"), wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE|wxST_NO_AUTORESIZE);
+	m_NextButton = new wxButton(this, ID_NextButton, wxT("Ne&xt"));
+	m_ContinuousButton = new wxButton(this, ID_ContinuousButton, wxT("Continuous"));
+	m_SaveAsButton = new wxButton(this, ID_SaveAsButton, wxT("Save As..."));
+	m_SaveToWavButton = new wxButton(this, ID_SaveToWavButton, wxT("Save to WAV(s).."));
+	m_SpliceToWavButton = new wxButton(this, ID_SpliceToWavButton, wxT("Splice to WAV..."));
+	m_ExtractAsButton = new wxButton(this, ID_ExtractAsButton, wxT("Extract As..."));
+    m_FileList = new CFilesListView(this, ID_FileList, wxDefaultPosition, wxDefaultSize);
+    m_SegmentList = new CSegmentsListView(this, ID_SegmentList, wxDefaultPosition, wxDefaultSize);
+
+	// Set some properties
+	m_LoadBankMapButton->Hide();
+	m_ContinuousButton->Hide();
+
+	// Add some tool tips
+	m_NextButton->SetToolTip(wxT("Move the selection down on track and play it."));
+	m_SaveAsButton->SetToolTip(wxT("Save the selected track(s) in the best output format."));
+	m_SaveToWavButton->SetToolTip(wxT("Save the selected track(s) as Microsoft Wave files."));
+	m_SpliceToWavButton->SetToolTip(wxT("Splice all the selected tracks together and save them as a single WAV file."));
+	m_ExtractAsButton->SetToolTip(wxT("Save the track(s) in their original forms (potentially not playable with common audio software)."));
 
 	// Do the layout
 	wxBoxSizer* MainSizer = new wxBoxSizer(wxVERTICAL);
 	wxBoxSizer* SecondarySizer = new wxBoxSizer(wxHORIZONTAL);
 	wxBoxSizer* ButtonsSizer = new wxBoxSizer(wxHORIZONTAL);
-	wxStaticBoxSizer* OutputSizer = new wxStaticBoxSizer(m_OutputSizer_staticbox, wxVERTICAL);
-	wxStaticBoxSizer* PlaySizer = new wxStaticBoxSizer(m_PlaySizer_staticbox, wxVERTICAL);
-	wxStaticBoxSizer* LayersSizer = new wxStaticBoxSizer(m_LayersSizer_staticbox, wxVERTICAL);
-	wxStaticBoxSizer* EditSizer = new wxStaticBoxSizer(m_EditSizer_staticbox, wxVERTICAL);
-	wxStaticBoxSizer* SelectionSizer = new wxStaticBoxSizer(m_SelectionSizer_staticbox, wxVERTICAL);
-	wxStaticBoxSizer* InputSizer = new wxStaticBoxSizer(m_InputSizer_staticbox, wxVERTICAL);
+	wxStaticBoxSizer* OutputSizer = new wxStaticBoxSizer(OutputSizer_staticbox, wxVERTICAL);
+	wxStaticBoxSizer* PlaySizer = new wxStaticBoxSizer(PlaySizer_staticbox, wxHORIZONTAL);
+	wxBoxSizer* PlaySizerCol2 = new wxBoxSizer(wxVERTICAL);
+	wxBoxSizer* PlaySizerCol1 = new wxBoxSizer(wxVERTICAL);
+	wxStaticBoxSizer* LayersSizer = new wxStaticBoxSizer(LayersSizer_staticbox, wxVERTICAL);
+	wxStaticBoxSizer* EditSizer = new wxStaticBoxSizer(EditSizer_staticbox, wxVERTICAL);
+	wxStaticBoxSizer* SelectionSizer = new wxStaticBoxSizer(SelectionSizer_staticbox, wxVERTICAL);
+	wxStaticBoxSizer* InputSizer = new wxStaticBoxSizer(InputSizer_staticbox, wxVERTICAL);
 	InputSizer->Add(m_ScanDirectoryButton, 0, wxBOTTOM|wxEXPAND, 5);
 	InputSizer->Add(m_ScanFileButton, 0, wxBOTTOM|wxEXPAND, 5);
 	InputSizer->Add(m_AddManuallyButton, 0, wxBOTTOM|wxEXPAND, 5);
+	InputSizer->Add(m_LoadBankMapButton, 0, wxBOTTOM|wxEXPAND, 5);
 	InputSizer->Add(m_ClearButton, 0, wxEXPAND, 5);
 	ButtonsSizer->Add(InputSizer, 0, wxRIGHT, 5);
-	SelectionSizer->Add(m_NextButton, 0, wxBOTTOM|wxEXPAND, 5);
 	SelectionSizer->Add(m_SelectAllButton, 0, wxBOTTOM|wxEXPAND, 5);
 	SelectionSizer->Add(m_SelectNoneButton, 0, wxBOTTOM|wxEXPAND, 5);
 	SelectionSizer->Add(m_SelectAllFilesButton, 0, wxEXPAND, 5);
@@ -126,14 +139,19 @@ NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wx
 	LayersSizer->Add(m_MixLayersButton, 0, wxBOTTOM|wxEXPAND, 5);
 	LayersSizer->Add(m_UnmixLayersButton, 0, wxEXPAND, 5);
 	ButtonsSizer->Add(LayersSizer, 0, wxRIGHT, 5);
-	PlaySizer->Add(m_PlayButton, 0, wxBOTTOM|wxEXPAND, 5);
-	PlaySizer->Add(m_LoopButton, 0, wxBOTTOM|wxEXPAND, 5);
-	PlaySizer->Add(m_StopButton, 0, wxBOTTOM|wxEXPAND, 5);
-	PlaySizer->Add(m_PlayLabel, 0, wxEXPAND, 5);
+	PlaySizerCol1->Add(m_PlayButton, 0, wxBOTTOM|wxEXPAND, 5);
+	PlaySizerCol1->Add(m_LoopButton, 0, wxBOTTOM|wxEXPAND, 5);
+	PlaySizerCol1->Add(m_StopButton, 0, wxBOTTOM|wxEXPAND, 5);
+	PlaySizerCol1->Add(m_PlayLabel, 0, wxEXPAND, 5);
+	PlaySizer->Add(PlaySizerCol1, 1, wxRIGHT|wxEXPAND, 5);
+	PlaySizerCol2->Add(m_NextButton, 0, wxBOTTOM|wxEXPAND, 5);
+	PlaySizerCol2->Add(m_ContinuousButton, 0, wxBOTTOM|wxEXPAND, 5);
+	PlaySizer->Add(PlaySizerCol2, 1, wxEXPAND, 5);
 	ButtonsSizer->Add(PlaySizer, 0, wxRIGHT, 5);
-	OutputSizer->Add(m_ConcatenatedButton, 0, wxBOTTOM|wxEXPAND, 5);
-	OutputSizer->Add(m_SeparateButton, 0, wxBOTTOM|wxEXPAND, 5);
-	OutputSizer->Add(m_LayerExtractButton, 0, wxEXPAND, 5);
+	OutputSizer->Add(m_SaveAsButton, 0, wxBOTTOM|wxEXPAND, 5);
+	OutputSizer->Add(m_SaveToWavButton, 0, wxBOTTOM|wxEXPAND, 5);
+	OutputSizer->Add(m_SpliceToWavButton, 0, wxBOTTOM|wxEXPAND, 5);
+	OutputSizer->Add(m_ExtractAsButton, 0, wxEXPAND, 5);
 	ButtonsSizer->Add(OutputSizer, 0, 0, 0);
 	MainSizer->Add(ButtonsSizer, 0, wxALL, 7);
 	SecondarySizer->Add(m_FileList, 1, wxRIGHT|wxEXPAND, 5);
@@ -160,12 +178,6 @@ NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wx
 NDecGui::CMainDialog::~CMainDialog()
 {
 	// Clean up
-	delete m_Sound;
-	m_Sound=NULL;
-	delete m_Stream;
-	m_Stream=NULL;
-	delete m_Playback;
-	m_Playback=NULL;
 	delete m_FilesList;
 	m_FilesList=NULL;
 	return;
@@ -254,10 +266,6 @@ void NDecGui::CMainDialog::RefreshGui()
 	{
 		EnableState=false;
 	}
-	if(m_NextButton->IsEnabled()!=EnableState)
-	{
-		m_NextButton->Enable(EnableState);
-	}
 	if(m_DuplicateButton->IsEnabled()!=EnableState)
 	{
 		m_DuplicateButton->Enable(EnableState);
@@ -320,6 +328,14 @@ void NDecGui::CMainDialog::RefreshGui()
 	{
 		m_LoopButton->Enable(EnableState);
 	}
+	if(m_NextButton->IsEnabled()!=EnableState)
+	{
+		m_NextButton->Enable(EnableState);
+	}
+	if(m_ContinuousButton->IsEnabled()!=EnableState)
+	{
+		m_ContinuousButton->Enable(EnableState);
+	}
 
 	// Stop button
 	EnableState=IsPlaying();
@@ -337,31 +353,24 @@ void NDecGui::CMainDialog::RefreshGui()
 	{
 		EnableState=false;
 	}
-	if(m_ConcatenatedButton->IsEnabled()!=EnableState)
+	if(m_SaveAsButton->IsEnabled()!=EnableState)
 	{
-		m_ConcatenatedButton->Enable(EnableState);
+		m_SaveAsButton->Enable(EnableState);
 	}
-	if(m_SeparateButton->IsEnabled()!=EnableState)
+	if(m_SaveToWavButton->IsEnabled()!=EnableState)
 	{
-		m_SeparateButton->Enable(EnableState);
+		m_SaveToWavButton->Enable(EnableState);
 	}
-	if(m_LayerExtractButton->IsEnabled()!=EnableState)
+	if(m_SpliceToWavButton->IsEnabled()!=EnableState)
 	{
-		m_LayerExtractButton->Enable(EnableState);
+		m_SpliceToWavButton->Enable(EnableState);
+	}
+	if(m_ExtractAsButton->IsEnabled()!=EnableState)
+	{
+		m_ExtractAsButton->Enable(EnableState);
 	}
 
-	// Check playing time
-	wxString PlayingTime(_("Stopped"));
-	if(IsPlaying())
-	{
-		unsigned long Minutes=m_SoundTimer.Time()/(1000*60);
-		unsigned long Seconds=(m_SoundTimer.Time()-Minutes*1000*60)/1000;
-		PlayingTime=wxString::Format(wxT("%lu:%02lu"), Minutes, Seconds);
-	}
-	if(m_PlayLabel->GetLabel()!=PlayingTime)
-	{
-		m_PlayLabel->SetLabel(PlayingTime);
-	}
+	UpdatePlayingTime();
 	return;
 }
 
@@ -374,21 +383,17 @@ void NDecGui::CMainDialog::OnClose(wxCloseEvent& Event)
 
 void NDecGui::CMainDialog::OnTimer(wxTimerEvent& Event)
 {
-	unsigned long Minutes=m_SoundTimer.Time()/(1000*60);
-	unsigned long Seconds=(m_SoundTimer.Time()-Minutes*1000*60)/1000;
-	m_PlayLabel->SetLabel(wxString::Format(wxT("%lu:%02lu"), Minutes, Seconds));
-	if(!IsPlaying())
+	UpdatePlayingTime();
+	if (!m_Player.isPlaying())
 	{
-		// I believe that this is not what's causing the stopping bug
-		Stop();
+		m_SegmentList->Stop();
+		RefreshGui();
 	}
-	return;
 }
 
 void NDecGui::CMainDialog::OnRefreshGui(wxCommandEvent& Event)
 {
 	RefreshGui();
-	return;
 }
 
 void NDecGui::CMainDialog::OnScanDirectoryButtonClicked(wxCommandEvent& Event)
@@ -423,58 +428,65 @@ void NDecGui::CMainDialog::OnScanDirectoryButtonClicked(wxCommandEvent& Event)
 
 void NDecGui::CMainDialog::OnScanFileButtonClicked(wxCommandEvent& Event)
 {
-	wxFileDialog Dlg(this, _("Scan file"), m_InputDir, wxEmptyString, \
-		_("All Files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	wxFileDialog OpenDlg(this, _("Scan file"), m_InputDir, wxEmptyString, \
+		_("All Files (*.*)|*.*"), wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 
-	if(Dlg.ShowModal()==wxID_OK)
+	if(OpenDlg.ShowModal()==wxID_OK)
 	{
 		// Save the default directory
-		m_InputDir=Dlg.GetDirectory();
+		m_InputDir=OpenDlg.GetDirectory();
 
-		// See if this file is already in the list
-		wxFileName NewFile(Dlg.GetPath());
-		bool Found=false;
-		for(unsigned long i=0;i<m_FilesList->GetCount();i++)
+		wxArrayString paths;
+		OpenDlg.GetPaths(paths);
+
+		for (wxArrayString::const_iterator iter = paths.begin(); iter != paths.end(); ++iter)
 		{
-			// Get it
-			NDecFunc::CSegmentsList& SegmentList=*m_FilesList->Get(i);
-
-			// Check with a filename object
-			wxFileName ExistingFile(SegmentList.GetFilename());
-
-			// If they are equal add it here
-			if(NewFile==ExistingFile)
+			// See if this file is already in the list
+			wxFileName NewFile(*iter);
+			bool Found = false;
+			unsigned int i = 0;
+			for(i = 0; i < m_FilesList->GetCount(); i++)
 			{
+				// Get it
+				NDecFunc::CSegmentsList& SegmentList=*m_FilesList->Get(i);
+
+				// Check with a filename object
+				wxFileName ExistingFile(SegmentList.GetFilename());
+
+				// If they are equal add it here
+				if(NewFile==ExistingFile)
+				{
+					// Scan into this file
+					SegmentList.Clear();
+					SegmentList.ScanFile();
+
+					// Set the selection to this file and this segment
+					TListSelection Sel;
+					Sel.push_back(i);
+					m_FileList->SetSelection(Sel);
+					Found=true;
+					break;
+				}
+			}
+
+			// If it wasn't found we need to make a new one
+			if(!Found)
+			{
+				// Create the new segment list
+				NDecFunc::CSegmentsList* SegmentList=new NDecFunc::CSegmentsList;
+				m_FilesList->Add(SegmentList);
+				SegmentList->SetFilename(iter->mb_str());
+
 				// Scan into this file
-				SegmentList.Clear();
-				SegmentList.ScanFile();
+				SegmentList->Clear();
+				SegmentList->ScanFile();
 
 				// Set the selection to this file and this segment
 				TListSelection Sel;
 				Sel.push_back(i);
+				m_FileList->RefreshGui();
 				m_FileList->SetSelection(Sel);
-				Found=true;
-				break;
 			}
-		}
-
-		// If it wasn't found we need to make a new one
-		if(!Found)
-		{
-			// Create the new segment list
-			NDecFunc::CSegmentsList* SegmentList=new NDecFunc::CSegmentsList;
-			m_FilesList->Add(SegmentList);
-			SegmentList->SetFilename(Dlg.GetPath().mb_str());
-
-			// Scan into this file
-			SegmentList->Clear();
-			SegmentList->ScanFile();
-
-			// Set the selection to this file and this segment
-			TListSelection Sel;
-			Sel.push_back(i);
-			m_FileList->RefreshGui();
-			m_FileList->SetSelection(Sel);
 		}
 
 		// Update
@@ -509,7 +521,8 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 		// See if this file is already in the list
 		wxFileName NewFile(Dlg.GetFilename());
 		bool Found=false;
-		for(unsigned long i=0;i<m_FilesList->GetCount();i++)
+		unsigned int i = 0;
+		for(i = 0; i < m_FilesList->GetCount(); i++)
 		{
 			// Get it
 			NDecFunc::CSegmentsList& SegmentList=*m_FilesList->Get(i);
@@ -603,11 +616,7 @@ void NDecGui::CMainDialog::OnNextButtonClicked(wxCommandEvent& Event)
 	FreezeUpdate();
 	m_SegmentList->SelectNext();
 	ThawUpdate();
-	//if(IsPlaying())
-	//{
-		//Stop();
-		Play();
-	//}
+	Play();
 	return;
 }
 
@@ -794,30 +803,112 @@ void NDecGui::CMainDialog::OnPlayButtonClicked(wxCommandEvent& Event)
 void NDecGui::CMainDialog::OnLoopButtonClicked(wxCommandEvent& Event)
 {
 	Play(true);
-	/*
-	NSound::CPlayer* Player;
-	NSound::CTestStream TestStream;
-	Player=NSound::CPlayer::CreatePlayer();
-	Player->Play(&TestStream);
-	wxSleep(1);
-	Player->Stop();
-	NSound::CPlayer::DestroyPlayer(Player);
-	Player=NULL;*/
 	return;
 }
 
 void NDecGui::CMainDialog::OnStopButtonClicked(wxCommandEvent& Event)
 {
-	if(m_Playback)
-	{
-		m_Playback->ForceStop(true);
-	}
 	m_StopButton->Enable(false);
 	Stop();
 	return;
 }
 
-void NDecGui::CMainDialog::OnConcatenatedButtonClicked(wxCommandEvent& Event)
+void NDecGui::CMainDialog::OnSaveAsButtonClicked(wxCommandEvent& Event)
+{
+	RefreshGui();
+
+	// Collect all of the selected items
+	std::vector<NDecFunc::CSegment*> Segments;
+	if(m_FileList->GetSelectedItemCount()>1)
+	{
+		TListSelection Sel;
+		m_FileList->GetSelection(Sel);
+		for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
+		{
+			NDecFunc::CSegmentsList* List=m_FilesList->Get(*Iter);
+			if(!List)
+			{
+				continue;
+			}
+			for(unsigned long i=0;i<List->GetCount();i++)
+			{
+				Segments.push_back(List->Get(i));
+			}
+		}
+	}
+	else if(m_SegmentList->GetSegmentsList())
+	{
+		TListSelection Sel;
+		m_SegmentList->GetSelection(Sel);
+		for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
+		{
+			Segments.push_back(m_SegmentList->GetSegmentsList()->Get(*Iter));
+		}
+	}
+
+	// Now prompt for an output directory
+	wxFileDialog Dlg(this, _("Save As"), m_OutputDir, wxEmptyString, \
+		_("Common audio formats (*.wav;*.ogg)|*.wav;*.ogg|All Files (*.*)|*.*"), wxFD_SAVE | \
+		wxFD_OVERWRITE_PROMPT);
+
+	if(Dlg.ShowModal()==wxID_OK)
+	{
+		// Save the default directory
+		m_OutputDir=Dlg.GetDirectory();
+
+		NDecFunc::OutputBest(Dlg.GetPath().mb_str(), Segments);
+	}
+}
+
+void NDecGui::CMainDialog::OnSaveToWavButtonClicked(wxCommandEvent& Event)
+{
+	RefreshGui();
+
+	// Collect all of the selected items
+	std::vector<NDecFunc::CSegment*> Segments;
+	if(m_FileList->GetSelectedItemCount()>1)
+	{
+		TListSelection Sel;
+		m_FileList->GetSelection(Sel);
+		for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
+		{
+			NDecFunc::CSegmentsList* List=m_FilesList->Get(*Iter);
+			if(!List)
+			{
+				continue;
+			}
+			for(unsigned long i=0;i<List->GetCount();i++)
+			{
+				Segments.push_back(List->Get(i));
+			}
+		}
+	}
+	else if(m_SegmentList->GetSegmentsList())
+	{
+		TListSelection Sel;
+		m_SegmentList->GetSelection(Sel);
+		for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
+		{
+			Segments.push_back(m_SegmentList->GetSegmentsList()->Get(*Iter));
+		}
+	}
+
+	// Now prompt for an output directory
+	wxFileDialog Dlg(this, _("Save to WAV(s)"), m_OutputDir, wxEmptyString, \
+		_("Microsoft Wave Files (*.wav)|*.wav|All Files (*.*)|*.*"), wxFD_SAVE | \
+		wxFD_OVERWRITE_PROMPT);
+
+	if(Dlg.ShowModal()==wxID_OK)
+	{
+		// Save the default directory
+		m_OutputDir=Dlg.GetDirectory();
+
+		NDecFunc::OutputSeparate(Dlg.GetPath().mb_str(), Segments);
+	}
+	return;
+}
+
+void NDecGui::CMainDialog::OnSpliceToWavButtonClicked(wxCommandEvent& Event)
 {
 	RefreshGui();
 
@@ -851,7 +942,7 @@ void NDecGui::CMainDialog::OnConcatenatedButtonClicked(wxCommandEvent& Event)
 	}
 
 	// Now prompt for an output filename
-	wxFileDialog Dlg(this, _("Decode to file"), m_OutputDir, wxEmptyString, \
+	wxFileDialog Dlg(this, _("Splice to WAV"), m_OutputDir, wxEmptyString, \
 		_("Microsoft Wave Files (*.wav)|*.wav|All Files (*.*)|*.*"), wxFD_SAVE | \
 		wxFD_OVERWRITE_PROMPT);
 
@@ -866,7 +957,7 @@ void NDecGui::CMainDialog::OnConcatenatedButtonClicked(wxCommandEvent& Event)
 	return;
 }
 
-void NDecGui::CMainDialog::OnSeparateButtonClicked(wxCommandEvent& Event)
+void NDecGui::CMainDialog::OnExtractAsButtonClicked(wxCommandEvent& Event)
 {
 	RefreshGui();
 
@@ -900,59 +991,14 @@ void NDecGui::CMainDialog::OnSeparateButtonClicked(wxCommandEvent& Event)
 	}
 
 	// Now prompt for an output directory
-	wxDirDialog Dlg(this, _("Decode to directory"), m_OutputDir, wxDD_DEFAULT_STYLE);
+	wxFileDialog Dlg(this, _("Extract As"), m_OutputDir, wxEmptyString, \
+		_("Raw audio layers (*.layer)|*.layer|All Files (*.*)|*.*"), wxFD_SAVE | \
+		wxFD_OVERWRITE_PROMPT);
 
 	if(Dlg.ShowModal()==wxID_OK)
 	{
 		// Save the default directory
-		m_OutputDir=Dlg.GetPath();
-
-		// Output it
-		NDecFunc::OutputSeparate(Dlg.GetPath().mb_str(), Segments);
-	}
-	return;
-}
-
-void NDecGui::CMainDialog::OnLayerExtractButtonClicked(wxCommandEvent& Event)
-{
-	RefreshGui();
-
-	// Collect all of the selected items
-	std::vector<NDecFunc::CSegment*> Segments;
-	if(m_FileList->GetSelectedItemCount()>1)
-	{
-		TListSelection Sel;
-		m_FileList->GetSelection(Sel);
-		for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
-		{
-			NDecFunc::CSegmentsList* List=m_FilesList->Get(*Iter);
-			if(!List)
-			{
-				continue;
-			}
-			for(unsigned long i=0;i<List->GetCount();i++)
-			{
-				Segments.push_back(List->Get(i));
-			}
-		}
-	}
-	else if(m_SegmentList->GetSegmentsList())
-	{
-		TListSelection Sel;
-		m_SegmentList->GetSelection(Sel);
-		for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
-		{
-			Segments.push_back(m_SegmentList->GetSegmentsList()->Get(*Iter));
-		}
-	}
-
-	// Now prompt for an output directory
-	wxDirDialog Dlg(this, _("Layer extract to directory"), m_OutputDir, wxDD_DEFAULT_STYLE);
-
-	if(Dlg.ShowModal()==wxID_OK)
-	{
-		// Save the default directory
-		m_OutputDir=Dlg.GetPath();
+		m_OutputDir=Dlg.GetDirectory();
 
 		// Output it
 		NDecFunc::OutputLayerExtract(Dlg.GetPath().mb_str(), Segments);
@@ -978,6 +1024,11 @@ void NDecGui::CMainDialog::OnSegmentListSelChange(wxListEvent& Event)
 	return;
 }
 
+void NDecGui::CMainDialog::OnSegmentListItemActivated(wxListEvent& Event)
+{
+	Play();
+}
+
 void NDecGui::CMainDialog::Play(bool Looping)
 {
 	// Check the state
@@ -986,33 +1037,19 @@ void NDecGui::CMainDialog::Play(bool Looping)
 		return;
 	}
 
-	// Remove any currently playing items
-	m_SegmentList->Stop();
-
-	// Check the current state
-	if(m_Sound)
-	{
-		// Stop it
-		m_Playback->ForceStop(true);
-		m_SoundUpdate.Stop();
-		m_SoundTimer.Pause();
-		m_Sound->Stop();
-
-		// Deallocate structures
-		delete m_Sound;
-		m_Sound=NULL;
-		delete m_Stream;
-		m_Stream=NULL;
-	}
-
 	// Make sure there is something to play
 	if(!m_SegmentList->GetSelectedItemCount())
 	{
 		return;
 	}
 
+	m_Player.stop();
+
+	// Remove any currently playing items
+	m_SegmentList->Stop();
+
 	// Create a new segment stream
-	m_Stream=new NDecFunc::CSegmentStream;
+	NDecFunc::CSegmentStream* stream = new NDecFunc::CSegmentStream;
 
 	// Get a list of what segments to play
 	NDecFunc::CSegmentsList& Segments=*m_SegmentList->GetSegmentsList();
@@ -1037,26 +1074,13 @@ void NDecGui::CMainDialog::Play(bool Looping)
 	for(TListSelection::const_iterator Iter=Sel.begin();Iter!=Sel.end();++Iter)
 	{
 		// Get the segment
-		m_Stream->Add(Segments.Get(*Iter));
-		m_Stream->Get(m_Stream->GetCount()-1)->SetListView(m_SegmentList);
-		m_Stream->Get(m_Stream->GetCount()-1)->SetListViewIndex(*Iter);
+		stream->Add(Segments.Get(*Iter)); // TODO Really, we should be making a copy of the segment here for thread safety
+		stream->Get(stream->GetCount()-1)->SetListView(m_SegmentList);
+		stream->Get(stream->GetCount()-1)->SetListViewIndex(*Iter);
 	}
 
-	// Create the player if it doesn't already exist
-	if(!m_Playback)
-	{
-		m_Playback=new wxSoundStreamWin;
-	}
-
-	// Create the segment sound stream
-	m_Sound=new CSegmentStreamSound(*m_Stream, *m_Playback);
-	m_Sound->SetLooping(Looping);
-
-	// Start it playing
-	m_Playback->ForceStop(false);
-	m_Sound->Play();
-	m_SoundUpdate.Start(1000);
-	m_SoundTimer.Start();
+	m_Player.setLoop(Looping);
+	m_Player.play(stream);
 
 	// Update
 	RefreshGui();
@@ -1065,40 +1089,36 @@ void NDecGui::CMainDialog::Play(bool Looping)
 
 bool NDecGui::CMainDialog::IsPlaying() const
 {
-	// Check the current state
-	if(!m_Playback || !m_Stream || !m_Sound)
-	{
-		return false;
-	}
-	return !m_Sound->IsStopped();
+	return m_Player.isPlaying();
 }
 
 void NDecGui::CMainDialog::Stop()
 {
+	m_Player.stop();
+
 	// Remove any currently playing items
 	m_SegmentList->Stop();
-
-	// Check the current state
-	if(!m_Sound)
-	{
-		return;
-	}
-
-	// Stop it
-	m_Playback->ForceStop(true);
-	m_SoundUpdate.Stop();
-	m_SoundTimer.Pause();
-	m_Sound->Stop();
-
-	// Deallocate structures
-	delete m_Sound;
-	m_Sound=NULL;
-	delete m_Stream;
-	m_Stream=NULL;
 
 	// Update
 	RefreshGui();
 	return;
+}
+
+void NDecGui::CMainDialog::UpdatePlayingTime()
+{
+	// Check playing time
+	wxString label(_("Stopped"));
+	if (IsPlaying())
+	{
+		long ms = m_Player.getPlayingTime();
+		long minutes = ms / (1000 * 60);
+		long seconds = (ms - minutes * 1000 * 60) / 1000; // Weird, but I'll go with it
+		label = wxString::Format(wxT("%lu:%02lu"), minutes, seconds);
+	}
+	if (m_PlayLabel->GetLabel() != label)
+	{
+		m_PlayLabel->SetLabel(label);
+	}
 }
 
 void NDecGui::CMainDialog::FreezeUpdate()

@@ -239,7 +239,7 @@ bool NDecFunc::CSegmentStream::InitializeAudioSegment(CSegment& Segment)
 	m_InputStream=new CFileDataStream(&m_InputFile, Segment.GetOffset(), Segment.GetSize());
 
 	// Create an audio output stream for each type
-	if(Segment.GetType()==EUF_UBI_V3 || Segment.GetType()==EUF_UBI_V5)
+	if(Segment.GetType()==EUF_UBI_V3 || Segment.GetType()==EUF_UBI_V5 || Segment.GetType()==EUF_UBI_V6)
 	{
 		CVersion5Stream* Stream=new CVersion5Stream(m_InputStream);
 		m_AudioStream=Stream;

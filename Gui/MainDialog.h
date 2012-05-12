@@ -5,6 +5,7 @@
 #pragma once
 
 #include <wx/listctrl.h>
+#include "../Sound/AudioPlayer.h"
 
 class wxSoundStreamWin;
 namespace NDecFunc
@@ -30,9 +31,8 @@ namespace NDecGui
 			ID_ScanDirectoryButton=1000,
 			ID_ScanFileButton,
 			ID_AddManuallyButton,
-			ID_LoadBankMapButton,
+			ID_LoadBankButton,
 			ID_ClearButton,
-			ID_NextButton,
 			ID_SelectAllButton,
 			ID_SelectNoneButton,
 			ID_SelectAllFilesButton,
@@ -45,9 +45,12 @@ namespace NDecGui
 			ID_LoopButton,
 			ID_StopButton,
 			ID_PlayLabel,
-			ID_ConcatenatedButton,
-			ID_SeparateButton,
-			ID_LayerExtractButton,
+			ID_NextButton,
+			ID_ContinuousButton,
+			ID_SaveAsButton,
+			ID_SaveToWavButton,
+			ID_SpliceToWavButton,
+			ID_ExtractAsButton,
 			ID_FileList,
 			ID_SegmentList
 		};
@@ -59,24 +62,19 @@ namespace NDecGui
 		wxString m_InputDir;
 		wxString m_OutputDir;
 
-		wxSoundStreamWin* m_Playback;
-		NDecFunc::CSegmentStream* m_Stream;
-		CSegmentStreamSound* m_Sound;
-		wxTimer m_SoundUpdate;
-		wxStopWatch m_SoundTimer;
+		AudioPlayer m_Player;
 
-		wxStaticBox* m_OutputSizer_staticbox;
-		wxStaticBox* m_PlaySizer_staticbox;
-		wxStaticBox* m_LayersSizer_staticbox;
-		wxStaticBox* m_EditSizer_staticbox;
-		wxStaticBox* m_SelectionSizer_staticbox;
-		wxStaticBox* m_InputSizer_staticbox;
+		wxStaticBox* OutputSizer_staticbox;
+		wxStaticBox* PlaySizer_staticbox;
+		wxStaticBox* LayersSizer_staticbox;
+		wxStaticBox* EditSizer_staticbox;
+		wxStaticBox* SelectionSizer_staticbox;
+		wxStaticBox* InputSizer_staticbox;
 		wxButton* m_ScanDirectoryButton;
 		wxButton* m_ScanFileButton;
 		wxButton* m_AddManuallyButton;
 		wxButton* m_LoadBankMapButton;
 		wxButton* m_ClearButton;
-		wxButton* m_NextButton;
 		wxButton* m_SelectAllButton;
 		wxButton* m_SelectNoneButton;
 		wxButton* m_SelectAllFilesButton;
@@ -89,13 +87,18 @@ namespace NDecGui
 		wxButton* m_LoopButton;
 		wxButton* m_StopButton;
 		wxStaticText* m_PlayLabel;
-		wxButton* m_ConcatenatedButton;
-		wxButton* m_SeparateButton;
-		wxButton* m_LayerExtractButton;
+		wxButton* m_NextButton;
+		wxButton* m_ContinuousButton;
+		wxButton* m_SaveAsButton;
+		wxButton* m_SaveToWavButton;
+		wxButton* m_SpliceToWavButton;
+		wxButton* m_ExtractAsButton;
+
 		CFilesListView* m_FileList;
 		CSegmentsListView* m_SegmentList;
 
 	protected:
+		void UpdatePlayingTime();
 		virtual void FreezeUpdate();
 		virtual void ThawUpdate();
 
@@ -125,11 +128,15 @@ namespace NDecGui
 		void OnPlayButtonClicked(wxCommandEvent& Event);
 		void OnLoopButtonClicked(wxCommandEvent& Event);
 		void OnStopButtonClicked(wxCommandEvent& Event);
-		void OnConcatenatedButtonClicked(wxCommandEvent& Event);
-		void OnSeparateButtonClicked(wxCommandEvent& Event);
-		void OnLayerExtractButtonClicked(wxCommandEvent& Event);
+
+		void OnSaveAsButtonClicked(wxCommandEvent& Event);
+		void OnSaveToWavButtonClicked(wxCommandEvent& Event);
+		void OnSpliceToWavButtonClicked(wxCommandEvent& Event);
+		void OnExtractAsButtonClicked(wxCommandEvent& Event);
+
 		void OnFileListSelChange(wxListEvent& Event);
 		void OnSegmentListSelChange(wxListEvent& Event);
+		void OnSegmentListItemActivated(wxListEvent& Event);
 
 		virtual void Play(bool Looping=false);
 		virtual bool IsPlaying() const;

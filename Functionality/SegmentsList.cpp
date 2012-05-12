@@ -20,6 +20,7 @@
 #include "Decoding/RawCompressedStream.h"
 #include "Decoding/RawPcmStream.h"
 #include "Decoding/Scan.h"
+#include "Decoding/UbiFormats.h"
 
 // CSegmentsList Implementation
 NDecFunc::CSegmentsList::CSegmentsList() :
@@ -45,6 +46,35 @@ std::string NDecFunc::CSegmentsList::GetFilename() const
 	return m_Filename;
 }
 
+class GuiScanCallback : public ScanCallback
+{
+public:
+
+	GuiScanCallback(wxProgressDialog& progDlg):
+	  progDlg(progDlg)
+	{
+	}
+
+	virtual bool progress(int percent)
+	{
+		return progDlg.Update(percent, _("Scanning..."));
+	}
+
+	virtual bool foundSegment(std::streamoff offset, std::streamsize size)
+	{
+		segments.push_back(Segment(offset, size));
+		return true;
+	}
+
+	// Keep track of the found
+	typedef std::pair<std::streamoff, std::streamsize> Segment;
+	typedef std::vector<Segment> SegmentVector;
+	SegmentVector segments;
+
+private:
+	wxProgressDialog& progDlg;
+};
+
 void NDecFunc::CSegmentsList::ScanFile()
 {
 	// Get a short filename
@@ -68,17 +98,17 @@ void NDecFunc::CSegmentsList::ScanFile()
 	Input.seekg(0);
 
 	// Do the scan
-	std::vector<SFound> FoundList;
-	ScanAndList(&Progress, Input, FoundList, StreamSize);
+	GuiScanCallback callback(Progress);
+	ScanAndList(Input, StreamSize, callback);
 
 	// Close the input file
 	Input.close();
 
 	// Add the segments
-	for(std::vector<SFound>::const_iterator Iter=FoundList.begin();Iter!=FoundList.end();++Iter)
+	for(GuiScanCallback::SegmentVector::const_iterator Iter = callback.segments.begin(); Iter != callback.segments.end(); ++Iter)
 	{
 		CSegment* NewSegment;
-		NewSegment=CreateSegment(Iter->Offset, Iter->Size);
+		NewSegment=CreateSegment(Iter->first, Iter->second);
 		if(NewSegment)
 		{
 			unsigned long InsertPos;
@@ -107,98 +137,22 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 		return NULL;
 	}
 
-	// Read the signature
-	unsigned char Signature[4];
-	Input.seekg(Offset);
-	Input.read((char*)Signature, 4);
-
 	// Autodetect type
-	if(Signature[0]==3)
+	try
 	{
-		Segment->SetType(EUF_UBI_V3);
+		Input.seekg(Offset);
+		Segment->SetType(DetermineFormat(Input, Size));
 	}
-	else if(Signature[0]==5)
+	catch (...)
 	{
-		Segment->SetType(EUF_UBI_V5);
-	}
-	else if(Signature[0]==2)
-	{
-		Segment->SetType(EUF_UBI_IV2);
-	}
-	else if(Signature[0]==8 && Signature[1]==0 && Signature[2]==0 && \
-		Signature[3]==0)
-	{
-		// Try a version 8 interleaved stream first
-		CFileDataStream FileStream(&Input, Segment->GetOffset(), Segment->GetSize());
-		CInterleavedStream Stream(&FileStream);
-		try
-		{
-			std::vector<unsigned long> Layers;
-			Layers.push_back(1);
-			Stream.SetCurrentLayers(Layers);
-
-			// Initialize
-			if(!Stream.InitializeHeader())
-			{
-				// Not a version 8 so must be a 6-Or-4
-				Segment->SetType(EUF_UBI_6OR4);
-			}
-			else
-			{
-				short Buffer[1024];
-				unsigned long NumberSamples=1024;
-				if(Stream.Decode(Buffer, NumberSamples))
-				{
-					Segment->SetType(EUF_UBI_IV8);
-				}
-				else
-				{
-					Segment->SetType(EUF_UBI_6OR4);
-				}
-			}
-		}
-		catch(...)
-		{
-			// Not a version 8 so must be a 6-Or-4
-			Segment->SetType(EUF_UBI_6OR4);
-		}
-	}
-	else if(Signature[0]==8 && Signature[1]==0)
-	{
-		Segment->SetType(EUF_UBI_IV8);
-	}
-	else if(Signature[0]==9 && Signature[1]==0)
-	{
-		Segment->SetType(EUF_UBI_IV9);
-	}
-	else if(Signature[3]==9 && Signature[2]==0)
-        {
-                Segment->SetType(EUF_UBI_IV9);
-        }
-	else if(Signature[0]==7 && Signature[1]==0)
-	{
-		Segment->SetType(EUF_UBI_IV8);
-	}
-	else if(Signature[3]==8 && Signature[2]==0)
-	{
-		Segment->SetType(EUF_UBI_IV8);
-	}
-	else if(Signature[0]=='O' && Signature[1]=='g' && Signature[2]=='g' && \
-				Signature[3]=='S')
-	{
-		Segment->SetType(EUF_OGG);
-	}
-	else
-	{
-		// Feebly assume 16-bit PCM
-		Segment->SetType(EUF_RAW);
+		return NULL;
 	}
 
 	// Create an audio input data stream
 	CFileDataStream InputStream(&Input, Segment->GetOffset(), Segment->GetSize());
 
 	// Create an audio output stream for each type
-	if(Segment->GetType()==EUF_UBI_V3 || Segment->GetType()==EUF_UBI_V5)
+	if(Segment->GetType()==EUF_UBI_V3 || Segment->GetType()==EUF_UBI_V5 || Segment->GetType()==EUF_UBI_V6)
 	{
 		CVersion5Stream Stream(&InputStream);
 
@@ -241,6 +195,7 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 			Segment->SetChannels(Stream.GetChannels());
 			for(unsigned long i=0;i<Stream.GetLayerCount();i++)
 			{
+				Segment->GetLayerTypes().push_back(Stream.GetType(i));
 				Segment->GetLayers().push_back(i);
 			}
 		}
@@ -272,6 +227,7 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 			Segment->SetChannels(Stream.GetChannels());
 			for(unsigned long i=0;i<Stream.GetLayerCount();i++)
 			{
+				Segment->GetLayerTypes().push_back(Stream.GetType(i));
 				Segment->GetLayers().push_back(i);
 			}
 		}
@@ -299,6 +255,7 @@ NDecFunc::CSegment* NDecFunc::CSegmentsList::CreateSegment(std::streamoff Offset
 			Segment->SetChannels(Stream.GetChannels());
 			for(unsigned long i=0;i<Stream.GetLayerCount();i++)
 			{
+				Segment->GetLayerTypes().push_back(Stream.GetType(i));
 				Segment->GetLayers().push_back(i);
 			}
 		}
@@ -637,11 +594,18 @@ void NDecFunc::CSegmentsList::Mix(const std::vector<unsigned long>& Indicies)
 				continue;
 			}
 
+			const CSegment& seg = *at(*Iter2);
+
 			// Add layers
-			const std::vector<unsigned long>& CurrentLayers=at(*Iter2)->GetLayers();
+			const std::vector<unsigned long>& CurrentLayers=seg.GetLayers();
 			for(std::vector<unsigned long>::const_iterator Iter3=CurrentLayers.begin();Iter3!=CurrentLayers.end();++Iter3)
 			{
 				FirstSegment.GetLayers().push_back(*Iter3);
+			}
+			std::vector<EUbiFormat>::const_iterator TypesIter = seg.GetLayerTypes().begin();
+			for(; TypesIter != seg.GetLayerTypes().end(); ++TypesIter)
+			{
+				FirstSegment.GetLayerTypes().push_back(*TypesIter);
 			}
 
 			// Delete
@@ -651,13 +615,17 @@ void NDecFunc::CSegmentsList::Mix(const std::vector<unsigned long>& Indicies)
 	}
 
 	// Remove ones marked for deletion
-	for(iterator Iter=begin();Iter!=end();++Iter)
+	// TODO This is somewhat hacky, oh well
+	std::vector<CSegment*> remaining;
+	for(iterator Iter = begin(); Iter != end(); ++Iter)
 	{
-		if(*Iter==NULL)
-		{
-			erase(Iter);
-			--Iter;
-		}
+		if(*Iter)
+			remaining.push_back(*Iter);
+	}
+	clear();
+	for (std::vector<CSegment*>::const_iterator Iter = remaining.begin(); Iter != remaining.end(); ++Iter)
+	{
+		push_back(*Iter);
 	}
 	return;
 }
@@ -695,6 +663,7 @@ void NDecFunc::CSegmentsList::Unmix(const std::vector<unsigned long>& Indicies)
 		// Create duplicates
 		unsigned long NumberExtraSegments=Segment.GetLayers().size()-1;
 		unsigned long InsertPos=Index+1;
+		std::vector<EUbiFormat>::const_iterator TypesIter = Segment.GetLayerTypes().begin();
 		for(std::vector<unsigned long>::const_iterator Iter2=Segment.GetLayers().begin();Iter2!=Segment.GetLayers().end();++Iter2)
 		{
 			// Duplicate the item
@@ -702,6 +671,9 @@ void NDecFunc::CSegmentsList::Unmix(const std::vector<unsigned long>& Indicies)
 			NewSegment=new CSegment(Segment);
 			NewSegment->GetLayers().clear();
 			NewSegment->GetLayers().push_back(*Iter2);
+			NewSegment->GetLayerTypes().clear();
+			NewSegment->GetLayerTypes().push_back(*TypesIter);
+			++TypesIter;
 
 			// Insert it
 			iterator InsertIter=begin()+InsertPos;

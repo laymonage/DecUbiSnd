@@ -5,10 +5,10 @@
 #include "Adpcm.h"
 
 // The index table
-static long IndexTable[]={-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8};
+static int IndexTable[]={-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8};
 
 // The step table
-static long StepTable[]={
+static int StepTable[]={
 7, 8, 9, 10, 11, 12, 13, 14,
 16, 17, 19, 21, 23, 25, 28, 31,
 34, 37, 41, 45, 50, 55, 60, 66,
@@ -34,16 +34,16 @@ bool DecompressMonoAdpcm(SAdpcmMonoParam* Param)
 	// Set up some variables
 	unsigned char* Input=Param->InputBuffer;
 	short* Output=Param->OutputBuffer;
-	long LastSample=Param->FirstSample;
-	long LastIndex=Param->FirstIndex;
-	long LastStep=StepTable[LastIndex];
+	int LastSample=Param->FirstSample;
+	int LastIndex=Param->FirstIndex;
+	int LastStep=StepTable[LastIndex];
 
 	// Loop through the data decompressing it
-	for(unsigned long i=0;i<Param->InputLength;i++)
+	for(unsigned int i=0;i<Param->InputLength;i++)
 	{
 		unsigned char Code;
-		long Difference;
-		long CurrentSample;
+		int Difference;
+		int CurrentSample;
 
 		// First
 		Code=Input[i]>>4;
@@ -56,7 +56,7 @@ bool DecompressMonoAdpcm(SAdpcmMonoParam* Param)
 		{
 			LastIndex=0;
 		}
-		Difference=(((Code&0x07)*2+1)*LastStep)>>3;
+		Difference=(((Code&0x07)*2+1)*LastStep) >> 3;
 		if(Code&0x08)
 		{
 			Difference=-Difference;
@@ -86,7 +86,7 @@ bool DecompressMonoAdpcm(SAdpcmMonoParam* Param)
 		{
 			LastIndex=0;
 		}
-		Difference=(((Code&0x07)*2+1)*LastStep)>>3;
+		Difference=(((Code&0x07)*2+1)*LastStep) >> 3;
 		if(Code&0x08)
 		{
 			Difference=-Difference;
@@ -124,19 +124,19 @@ bool DecompressStereoAdpcm(SAdpcmStereoParam* Param)
 	// Set up some variables
 	unsigned char* Input=Param->InputBuffer;
 	short* Output=Param->OutputBuffer;
-	long LastLeftSample=Param->FirstLeftSample;
-	long LastRightSample=Param->FirstRightSample;
-	long LastLeftIndex=Param->FirstLeftIndex;
-	long LastRightIndex=Param->FirstRightIndex;
-	long LastLeftStep=StepTable[LastLeftIndex];
-	long LastRightStep=StepTable[LastRightIndex];
+	int LastLeftSample=Param->FirstLeftSample;
+	int LastRightSample=Param->FirstRightSample;
+	int LastLeftIndex=Param->FirstLeftIndex;
+	int LastRightIndex=Param->FirstRightIndex;
+	int LastLeftStep=StepTable[LastLeftIndex];
+	int LastRightStep=StepTable[LastRightIndex];
 
 	// Loop through the data decompressing it
-	for(unsigned long i=0;i<Param->InputLength;i++)
+	for(unsigned int i=0;i<Param->InputLength;i++)
 	{
 		unsigned char Code;
-		long Difference;
-		long CurrentSample;
+		int Difference;
+		int CurrentSample;
 
 		// Left
 		Code=Input[i]>>4;

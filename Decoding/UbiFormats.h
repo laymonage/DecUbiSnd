@@ -3,6 +3,22 @@
 
 #pragma once
 
+enum EUbiFormat
+{
+	EUF_NULL,
+	EUF_UBI_V3,
+	EUF_UBI_V5,
+	EUF_UBI_V6,
+	EUF_UBI_IV2,
+	EUF_UBI_IV8,
+	EUF_UBI_IV9,
+	EUF_UBI_6OR4,
+	EUF_UBI_RAW,
+	EUF_PCM,
+	EUF_RAW = EUF_PCM,
+	EUF_OGG
+};
+
 inline EUbiFormat StringToUbiFormat(const std::string& String)
 {
 	if(String=="ubi_v3")
@@ -12,6 +28,10 @@ inline EUbiFormat StringToUbiFormat(const std::string& String)
 	else if(String=="ubi_v5")
 	{
 		return EUF_UBI_V5;
+	}
+	else if(String=="ubi_v6")
+	{
+		return EUF_UBI_V6;
 	}
 	else if(String=="ubi_iv2")
 	{
@@ -43,3 +63,17 @@ inline EUbiFormat StringToUbiFormat(const std::string& String)
 	}
 	return EUF_UBI_RAW;
 }
+
+EUbiFormat DetermineFormat(std::istream& input, std::streamsize size = -1);
+
+// This is somewhat unwise to put this here
+#include "DataExceptions.h"
+#include "AudioExceptions.h"
+#include "Version5Stream.h"
+#include "InterleavedStream.h"
+#include "Interleaved9Stream.h"
+#include "OldInterleavedStream.h"
+#include "Old6Or4BitStream.h"
+#include "OggVorbisStream.h"
+#include "RawCompressedStream.h"
+#include "RawPcmStream.h"

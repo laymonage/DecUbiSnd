@@ -175,7 +175,9 @@ bool CLayeredStreamHelper::DoDecodeBlock()
 
 void CLayeredStreamHelper::RegisterLayerParams()
 {
-	RegisterParam("Layer", (TSetLongParamProc)_SetCurrentLayer, NULL, (TGetLongParamProc)_GetCurrentLayer, NULL);
+	RegisterParam("Layer",
+		(TSetLongParamProc)&CLayeredStreamHelper::_SetCurrentLayer, NULL,
+		(TGetLongParamProc)&CLayeredStreamHelper::_GetCurrentLayer, NULL);
 	return;
 }
 

@@ -80,8 +80,8 @@ bool COld6Or4BitStream::InitializeHeader(unsigned long SampleRate)
 	m_Channels=(unsigned char)m_Header.Channels;
 
 	// Allocate an expanded buffer
-	m_SamplesLeft=m_Header.SampleCount;
-	m_ByteBlockSize=m_Header.BitsPerSample*384;
+	m_SamplesLeft = m_Header.SampleCount;
+	m_ByteBlockSize = m_Header.BitsPerSample * m_Header.BlockSize / 4;
 	if(m_Header.BitsPerSample==6)
 	{
 		m_ExpandedBuffer=new unsigned long[Get6BitAdpcmSamples(m_ByteBlockSize)];

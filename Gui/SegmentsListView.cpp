@@ -26,7 +26,7 @@ NDecGui::CSegmentsListView::CSegmentsListView(wxWindow* Parent, wxWindowID ID, \
 	InsertColumn(0, _("Type"), wxLIST_FORMAT_LEFT, 100);
 	InsertColumn(1, _("Layers"), wxLIST_FORMAT_LEFT, 50);
 	InsertColumn(2, _("Channels"), wxLIST_FORMAT_LEFT, 40);
-	InsertColumn(3, _("Sample Rate"), wxLIST_FORMAT_LEFT, 50);
+	InsertColumn(3, _("Sample Rate"), wxLIST_FORMAT_LEFT, 60);
 	InsertColumn(4, _("Offset"), wxLIST_FORMAT_LEFT, 75);
 	InsertColumn(5, _("Size"), wxLIST_FORMAT_LEFT, 75);
 
@@ -54,6 +54,8 @@ static wxString UbiFormatToString(EUbiFormat Format)
 		return wxT("Old Simple Stream");
 		case EUF_UBI_V5:
 		return wxT("Simple Stream");
+		case EUF_UBI_V6:
+		return wxT("Simple Stream 6");
 		case EUF_UBI_IV2:
 		return wxT("Old Interleaved Stream");
 		case EUF_UBI_IV8:
@@ -90,10 +92,25 @@ wxString NDecGui::CSegmentsListView::OnGetItemText(long Item, long Column) const
 	// Go through the columns
 	wxString Text;
 	bool First;
+	bool sampleRateUncertain;
 	switch(Column)
 	{
 		case 0:
 			Text=UbiFormatToString(Segment.GetType());
+
+			switch (Segment.GetType())
+			{
+			case EUF_UBI_IV2:
+			case EUF_UBI_IV8:
+			case EUF_UBI_IV9:
+				if (Segment.GetLayerTypes().size() > 0)
+				{
+					Text += wxT(" (");
+					Text += UbiFormatToString(Segment.GetLayerTypes().at(0));
+					Text += wxT(")");
+				}
+				break;
+			}
 		break;
 		case 1:
 			First=true;
@@ -115,7 +132,45 @@ wxString NDecGui::CSegmentsListView::OnGetItemText(long Item, long Column) const
 			Text=wxString::Format(wxT("%lu"), (unsigned long)Segment.GetChannels());
 		break;
 		case 3:
-			Text=wxString::Format(wxT("%lu"), Segment.GetSampleRate());
+			// Depending on the format, we might want to indicate it has been guessed
+			sampleRateUncertain = false;
+			switch (Segment.GetType())
+			{
+			case EUF_UBI_V3:
+			case EUF_UBI_V5:
+			case EUF_UBI_V6:
+				sampleRateUncertain = true;
+				break;
+
+			case EUF_UBI_IV2:
+			case EUF_UBI_IV8:
+			case EUF_UBI_IV9:
+				if (Segment.GetLayerTypes().size() > 0)
+				{
+					switch (Segment.GetLayerTypes().at(0))
+					{
+					case EUF_UBI_V3:
+					case EUF_UBI_V5:
+					case EUF_UBI_V6:
+						sampleRateUncertain = true;
+						break;
+
+					default:
+						sampleRateUncertain = false;
+						break;
+					}
+				}
+				break;
+
+			default:
+				sampleRateUncertain = false;
+				break;
+			}
+
+			if (sampleRateUncertain)
+				Text = wxString::Format(wxT("[%lu]"), Segment.GetSampleRate());
+			else
+				Text = wxString::Format(wxT("%lu"), Segment.GetSampleRate());
 		break;
 		case 4:
 			Text=wxString::Format(wxT("%lu"), Segment.GetOffset());

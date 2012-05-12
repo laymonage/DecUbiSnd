@@ -4,9 +4,11 @@
 #include "Pch.h"
 #include "OldInterleavedStream.h"
 #include "Version5Stream.h"
+#include "Old6Or4BitStream.h"
 #include "BufferDataStream.h"
 #include "DataExceptions.h"
 #include "AudioExceptions.h"
+#include "UbiFormats.h"
 
 // Information associated with each layer
 struct COldInterleavedStream::SOldInterleavedLayer
@@ -14,7 +16,8 @@ struct COldInterleavedStream::SOldInterleavedLayer
 	SOldInterleavedLayer() : Stream(NULL), Data(NULL) {};
 	~SOldInterleavedLayer() { delete Stream; delete Data; }
 
-	CVersion5Stream* Stream;
+	EUbiFormat Type;
+	CAudioStream* Stream;
 	CBufferDataStream* Data;
 	bool First;
 };
@@ -71,9 +74,9 @@ bool COldInterleavedStream::InitializeHeader(unsigned long SampleRate)
 	m_BlockNumber=1;
 
 	// A check
-	if(NumberLayers!=3)
+	if(NumberLayers != 3)
 	{
-		std::cerr << "Information: " << NumberLayers << " layers" << std::endl;
+		//std::cerr << "Information: " << NumberLayers << " layers" << std::endl;
 	}
 
 	// Create the layers
@@ -83,9 +86,9 @@ bool COldInterleavedStream::InitializeHeader(unsigned long SampleRate)
 		SOldInterleavedLayer* Layer=new SOldInterleavedLayer;
 
 		// Create a new stream for the layer
-		Layer->Data=new CBufferDataStream();
-		Layer->Stream=new CVersion5Stream(Layer->Data);
-		Layer->First=true;
+		Layer->Data = new CBufferDataStream();
+		Layer->Stream = NULL;
+		Layer->First = true;
 
 		// Push it on
 		m_Layers.push_back(Layer);
@@ -112,26 +115,70 @@ bool COldInterleavedStream::InitializeHeader(unsigned long SampleRate)
 	for(unsigned long i=0;i<m_Layers.size();i++)
 	{
 		// Get the layer
-		SOldInterleavedLayer& Layer=*m_Layers[i];
+		SOldInterleavedLayer& Layer = *m_Layers[i];
 
 		try
 		{
-			// Initialize the header
-			if(!Layer.Stream->InitializeHeader(SampleRate))
+			// Look at the header type
+			uint8_t Type;
+			Layer.Data->ExactPeek(&Type, 1);
+		
+			if (Type == 3 || Type == 5 || Type == 6)
 			{
-				Clear();
-				return false;
-			}
+				CVersion5Stream* Stream;
+				Stream = new CVersion5Stream(Layer.Data);
+				switch (Type)
+				{
+				case 3:
+					Layer.Type = EUF_UBI_V3;
+					break;
+				case 5:
+					Layer.Type = EUF_UBI_V5;
+					break;
+				case 6:
+					Layer.Type = EUF_UBI_V6;
+					break;
+				default:
+					Layer.Type = EUF_UBI_V5;
+					break;
+				}
+				Layer.Stream = Stream;
 
-			// Get channels and sample rate
-			m_SampleRate=Layer.Stream->GetSampleRate();
-			if(Layer.Stream->GetChannels()==1)
+				// Initialize the header
+				if(!Stream->InitializeHeader(SampleRate))
+				{
+					Clear();
+					return false;
+				}
+			}
+			else if (Type == 8)
 			{
-				m_Stereo=false;
+				COld6Or4BitStream* Stream;
+				Stream = new COld6Or4BitStream(Layer.Data);
+				Layer.Type = EUF_UBI_6OR4;
+				Layer.Stream = Stream;
+
+				// Initialize the header
+				if(!Stream->InitializeHeader())
+				{
+					Clear();
+					return false;
+				}
 			}
 			else
 			{
-				m_Stereo=true;
+				throw XFileException("Old interleaved format: unrecognized inner stream format");
+			}
+
+			// Get channels and sample rate
+			m_SampleRate = Layer.Stream->GetSampleRate();
+			if(Layer.Stream->GetChannels() == 1)
+			{
+				m_Stereo = false;
+			}
+			else
+			{
+				m_Stereo = true;
 			}
 		}
 		catch(XNeedBuffer&)
@@ -329,6 +376,19 @@ unsigned char COldInterleavedStream::GetChannels() const
 std::string COldInterleavedStream::GetFormatName() const
 {
 	return "ubi_iv2";
+}
+
+EUbiFormat COldInterleavedStream::GetType(unsigned long Layer) const
+{
+	// Check the state
+	if(Layer<0 || Layer>=m_Layers.size())
+	{
+		throw(XUserException("The layer number is not valid"));
+	}
+
+	// Get a reference to the layer
+	const SOldInterleavedLayer& LayerRef=*m_Layers[Layer];
+	return LayerRef.Type;
 }
 
 unsigned long COldInterleavedStream::GetTotalBytes() const
