@@ -8,6 +8,7 @@
 #include "BufferDataStream.h"
 #include "DataExceptions.h"
 #include "AudioExceptions.h"
+#include "UbiFormats.h"
 
 // Information associated with each layer
 struct CInterleaved9Stream::SInterleavedLayer
@@ -15,7 +16,7 @@ struct CInterleaved9Stream::SInterleavedLayer
 	SInterleavedLayer() : Stream(NULL), Data(NULL) {}
 	~SInterleavedLayer() { delete Stream; delete Data; }
 
-	EAudioType Type;
+	EUbiFormat Type;
 	CAudioStream* Stream;
 	CBufferDataStream* Data;
 	bool First;
@@ -136,7 +137,7 @@ bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned ch
 		if(HeaderSizes[i]==0)
 		{
 			// Must be PCM, there is no header
-			Layer.Type=AT_PCM;
+			Layer.Type=EUF_PCM;
 			Layer.Stream=NULL;
 			if(SampleRate==0)
 			{
@@ -148,17 +149,31 @@ bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned ch
 			}
 			m_Channels=PcmChannels;
 		}
-		else if((Buffer[0]==5 || Buffer[0]==3) && HeaderSizes[i]>=28)
+		else if((Buffer[0]==5 || Buffer[0]==3 || Buffer[0]==6) && HeaderSizes[i] >= 28)
 		{
 			// Check the header size
-			if(HeaderSizes[i]!=28)
+			if(HeaderSizes[i] != 28 && HeaderSizes[i] != 36)
 			{
-				std::cerr << "Warning: Header size is unrecognized (ADPCM, " << HeaderSizes[i] << " bytes, should be " << 28 << ")" << std::endl;
+				std::cerr << "Warning: Header size is unrecognized (ADPCM, " << HeaderSizes[i] << " bytes, should be 28 or 36)" << std::endl;
 			}
 
 			// It is likely a simple block
 			CVersion5Stream* Stream=new CVersion5Stream(Layer.Data);
-			Layer.Type=AT_ADPCM;
+			switch (Buffer[0])
+			{
+			case 3:
+				Layer.Type = EUF_UBI_V3;
+				break;
+			case 5:
+				Layer.Type = EUF_UBI_V5;
+				break;
+			case 6:
+				Layer.Type = EUF_UBI_V6;
+				break;
+			default:
+				Layer.Type = EUF_UBI_V5;
+				break;
+			}
 			Layer.Stream=Stream;
 
 			// Initialize the header
@@ -185,7 +200,7 @@ bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned ch
 		{
 			// It is Ogg Vorbis
 			COggVorbisStream* Stream=new COggVorbisStream(Layer.Data);
-			Layer.Type=AT_OGGVORBIS;
+			Layer.Type=EUF_OGG;
 			Layer.Stream=Stream;
 		}
 	}
@@ -207,15 +222,15 @@ bool CInterleaved9Stream::InitializeHeader(unsigned long SampleRate, unsigned ch
 		SInterleavedLayer& Layer=*m_Layers[i];
 
 		// Initialize the headers
-		if(Layer.Type==AT_PCM)
+		if(Layer.Type==EUF_PCM)
 		{
 			// Raw PCM has no header
 		}
-		else if(Layer.Type==AT_ADPCM)
+		else if(Layer.Type==EUF_UBI_V3 || Layer.Type==EUF_UBI_V5 || Layer.Type==EUF_UBI_V6)
 		{
 			// Already initialized
 		}
-		else if(Layer.Type==AT_OGGVORBIS)
+		else if(Layer.Type==EUF_OGG)
 		{
 			// Grab as much data as we need
 			while(true)
@@ -508,7 +523,7 @@ std::string CInterleaved9Stream::GetFormatName() const
 	return "ubi_iv9";
 }
 
-CInterleaved9Stream::EAudioType CInterleaved9Stream::GetType(unsigned long Layer) const
+EUbiFormat CInterleaved9Stream::GetType(unsigned long Layer) const
 {
 	// Check the state
 	if(Layer<0 || Layer>=m_Layers.size())

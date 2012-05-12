@@ -6,36 +6,36 @@
 
 struct S6BitAdpcmBlockHeader
 {
-	unsigned long Signature;
-	unsigned long LastIndex1;
-	unsigned long Unknown2;
-	unsigned long Unknown3;
-	unsigned long Unknown4;
-	unsigned long Unknown5;
-	unsigned long Unknown6;
-	unsigned long Unknown7;
-	unsigned long LastSample;
-	unsigned long Unknown9;
-	unsigned long LastIndex2;
-	unsigned long Unknown11;
-	unsigned long Unknown12;
+	uint32_t Signature;
+	uint32_t LastIndex1;
+	uint32_t Unknown2;
+	uint32_t Unknown3;
+	uint32_t Unknown4;
+	uint32_t Unknown5;
+	uint32_t Unknown6;
+	uint32_t Unknown7;
+	uint32_t LastSample;
+	uint32_t Unknown9;
+	uint32_t LastIndex2;
+	uint32_t Unknown11;
+	uint32_t Unknown12;
 };
 
 struct S4BitAdpcmBlockHeader
 {
-	unsigned long Signature;
-	unsigned long Unknown1;
-	unsigned long Unknown2;
-	unsigned long Unknown3;
-	unsigned long Unknown4;
-	unsigned long Unknown5;
-	unsigned long Unknown6;
-	unsigned long Unknown7;
-	unsigned long Unknown8;
-	unsigned long Unknown9;
-	unsigned long Unknown10;
-	unsigned long Unknown11;
-	unsigned long Unknown12;
+	uint32_t Signature;
+	uint32_t Unknown1;
+	uint32_t Unknown2;
+	uint32_t Unknown3;
+	uint32_t Unknown4;
+	uint32_t Unknown5;
+	uint32_t Unknown6;
+	uint32_t Unknown7;
+	uint32_t Unknown8;
+	uint32_t Unknown9;
+	uint32_t Unknown10;
+	uint32_t Unknown11;
+	uint32_t Unknown12;
 };
 
 // Get the number of samples in a specified number of bytes 6-bit

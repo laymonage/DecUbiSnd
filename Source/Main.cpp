@@ -367,95 +367,18 @@ int Decode(SArguments& Args)
 		}
 
 		// Determine the type
-		unsigned char Signature[4];
 		EUbiFormat Type;
 		Input.seekg(Segment.GetOffset());
-		Type=Args.InputTypeForce;
-		Input.read((char*)Signature, 4);
-		if(Type==EUF_NULL)
-		{
-			if(Signature[0]==3)
-			{
-				Type=EUF_UBI_V3;
-			}
-			else if(Signature[0]==5)
-			{
-				Type=EUF_UBI_V5;
-			}
-			else if(Signature[0]==2)
-			{
-				Type=EUF_UBI_IV2;
-			}
-			else if(Signature[0]==8 && Signature[1]==0 && Signature[2]==0 && \
-				Signature[3]==0)
-			{
-				// Try a version 8 interleaved stream first
-				CFileDataStream FileStream(&Input, Segment.GetOffset(), Segment.GetSize());
-				CInterleavedStream Stream(&FileStream);
-				try
-				{
-					std::vector<unsigned long> Layers;
-					Layers.push_back(1);
-					Stream.SetCurrentLayers(Layers);
 
-					// Initialize
-					if(!Stream.InitializeHeader(SampleRate, Args.InputChannels))
-					{
-						// Not a version 8 so must be a 6-Or-4
-						Type=EUF_UBI_6OR4;
-					}
-					else
-					{
-						short Buffer[1024];
-						unsigned long NumberSamples=1024;
-						if(Stream.Decode(Buffer, NumberSamples))
-						{
-							Type=EUF_UBI_IV8;
-						}
-						else
-						{
-							Type=EUF_UBI_6OR4;
-						}
-					}
-				}
-				catch(...)
-				{
-					// Not a version 8 so must be a 6-Or-4
-					Type=EUF_UBI_6OR4;
-				}
-			}
-			else if(Signature[0]==8 && Signature[1]==0)
-			{
-				Type=EUF_UBI_IV8;
-			}
-			else if(Signature[0]==9 && Signature[1]==0)
-			{
-				Type=EUF_UBI_IV9;
-			}
-			else if(Signature[3]==9 && Signature[2]==0)
-                        {
-                                Type=EUF_UBI_IV9;
-                        }
-			else if(Signature[0]==7 && Signature[1]==0)
-			{
-				Type=EUF_UBI_IV8;
-			}
-			else if(Signature[3]==8 && Signature[2]==0)
-			{
-				Type=EUF_UBI_IV8;
-			}
-			else if(Signature[0]=='O' && Signature[1]=='g' && Signature[2]=='g' && \
-				Signature[3]=='S')
-			{
-				Type=EUF_OGG;
-			}
-		}
+		Type = Args.InputTypeForce;
+		if(Type == EUF_NULL)
+			Type = DetermineFormat(Input, Segment.GetSize());
 
 		// Set up an input stream
 		CFileDataStream FileStream(&Input, Segment.GetOffset(), Segment.GetSize());
 
 		// Decompress the audio
-		if(Type==EUF_UBI_V3 || Type==EUF_UBI_V5)
+		if(Type==EUF_UBI_V3 || Type==EUF_UBI_V5 || Type==EUF_UBI_V6)
 		{
 			// Decode the stream
 			CVersion5Stream Stream(&FileStream);
@@ -597,13 +520,19 @@ int Decode(SArguments& Args)
 						std::cout << "Layer " << i+1 << ": ";
 						switch(Stream.GetType(i))
 						{
-							case CInterleavedStream::AT_PCM:
+							case EUF_PCM:
 								std::cout << "Raw 16-bit uncompressed";
 							break;
-							case CInterleavedStream::AT_ADPCM:
+							case EUF_UBI_V3:
+								std::cout << "Simple chunk (version 3)";
+							break;
+							case EUF_UBI_V5:
 								std::cout << "Simple chunk (version 5)";
 							break;
-							case CInterleavedStream::AT_OGGVORBIS:
+							case EUF_UBI_V6:
+								std::cout << "Simple chunk (version 6)";
+							break;
+							case EUF_OGG:
 								std::cout << "Ogg Vorbis";
 							break;
 						}
@@ -673,13 +602,19 @@ int Decode(SArguments& Args)
 						std::cout << "Layer " << i+1 << ": ";
 						switch(Stream.GetType(i))
 						{
-							case CInterleavedStream::AT_PCM:
+							case EUF_PCM:
 								std::cout << "Raw 16-bit uncompressed";
 							break;
-							case CInterleavedStream::AT_ADPCM:
+							case EUF_UBI_V3:
+								std::cout << "Simple chunk (version 3)";
+							break;
+							case EUF_UBI_V5:
 								std::cout << "Simple chunk (version 5)";
 							break;
-							case CInterleavedStream::AT_OGGVORBIS:
+							case EUF_UBI_V6:
+								std::cout << "Simple chunk (version 6)";
+							break;
+							case EUF_OGG:
 								std::cout << "Ogg Vorbis";
 							break;
 						}
@@ -744,7 +679,26 @@ int Decode(SArguments& Args)
 					std::cout << "Total Size: " << Stream.GetTotalBytes() << std::endl;
 					std::cout << "Channels: " << (int)Stream.GetChannels() << std::endl;
 					std::cout << "Number of Layers: " << Stream.GetLayerCount() << std::endl;
-					std::cout << "All Layers: Old simple chunk (version 3)" << std::endl;
+					for(unsigned long i=0;i<Stream.GetLayerCount();i++)
+					{
+						std::cout << "Layer " << i+1 << ": ";
+						switch(Stream.GetType(i))
+						{
+							case EUF_UBI_V3:
+								std::cout << "Simple chunk (version 3)";
+							break;
+							case EUF_UBI_V5:
+								std::cout << "Simple chunk (version 5)";
+							break;
+							case EUF_UBI_V6:
+								std::cout << "Simple chunk (version 6)";
+							break;
+							case EUF_UBI_6OR4:
+								std::cout << "Old 6-or-4 bit chunk";
+							break;
+						}
+						std::cout << std::endl;
+					}
 					std::cout << std::endl;
 				}
 
@@ -795,7 +749,7 @@ int Decode(SArguments& Args)
 					std::cout << "Offset: " << Segment.GetOffset() << std::endl;
 					std::cout << "Channels: " << (int)Stream.GetChannels() << std::endl;
 					std::cout << "Sample Rate: " << Stream.GetSampleRate() << std::endl;
-					std::cout << "Bits Per Sample: " << Stream.GetBitsPerSample() << std::endl;
+					std::cout << "Bits Per Sample: " << (int)Stream.GetBitsPerSample() << std::endl;
 					std::cout << std::endl;
 				}
 
@@ -1040,6 +994,21 @@ int Decode(SArguments& Args)
 	return 0;
 }
 
+class PrintingScanCallback : public ScanCallback
+{
+public:
+
+	virtual bool foundSegment(std::streamoff offset, std::streamsize size)
+	{
+		std::cout << offset << "\t" << size << std::endl;
+		count++;
+		return true;
+	}
+
+	// Keep track of how many were found
+	unsigned long count;
+};
+
 int Scan(SArguments& Args)
 {
 	// Check the arguments
@@ -1069,9 +1038,14 @@ int Scan(SArguments& Args)
 		Input.seekg(0);
 	}
 
+	PrintingScanCallback callback;
+	callback.count = 0;
+
 	// Scan the file
 	Input.seekg((std::streamoff)Args.InputOffset);
-	ScanAndList(Input, Args.InputOffset+Args.InputSize);
+	ScanAndList(Input, Args.InputOffset+Args.InputSize, callback);
+
+	std::cerr << "Found: " << callback.count << std::endl;
 
 	// Finish up
 	Input.close();
@@ -1122,58 +1096,20 @@ int LayerExtract(SArguments& Args)
 	}
 
 	// Determine the type
-	unsigned char Signature[4];
 	EUbiFormat Type;
 	Input.seekg(Args.InputOffset);
-	Type=Args.InputTypeForce;
-	Input.read((char*)Signature, 4);
-	if(Type==EUF_NULL)
+	Type = Args.InputTypeForce;
+
+	if(Type == EUF_NULL)
+		Type = DetermineFormat(Input, Args.InputSize);
+		
+	if(Type == EUF_NULL)
 	{
-		if(Signature[0]==3)
-		{
-			Type=EUF_UBI_V3;
-		}
-		else if(Signature[0]==5)
-		{
-			Type=EUF_UBI_V5;
-		}
-		else if(Signature[0]==2)
-		{
-			Type=EUF_UBI_IV2;
-		}
-		else if(Signature[0]==8 && Signature[1]==0)
-		{
-			Type=EUF_UBI_IV8;
-		}
-		else if(Signature[0]==7 && Signature[1]==0)
-		{
-			Type=EUF_UBI_IV8;
-		}
-		else if(Signature[0]==9 && Signature[1]==0)
-		{
-			Type=EUF_UBI_IV9;
-		}
-		else if(Signature[3]==9 && Signature[2]==0)
-                {
-                        Type=EUF_UBI_IV9;
-                }
-		else if(Signature[3]==8 && Signature[2]==0)
-		{
-			Type=EUF_UBI_IV8;
-		}
-		else if(Signature[0]=='O' && Signature[1]=='g' && Signature[2]=='g' && \
-			Signature[3]=='S')
-		{
-			Type=EUF_OGG;
-		}
-		else
-		{
-			std::cerr << "The input file is not a supported format. ";
-			std::cerr << "Use --input-type to force a specific format." << std::endl;
-			Input.close();
-			Output.close();
-			return 100;
-		}
+		std::cerr << "The input file is not a supported format. ";
+		std::cerr << "Use --input-type to force a specific format." << std::endl;
+		Input.close();
+		Output.close();
+		return 100;
 	}
 
 	// Set up an input stream
@@ -1302,12 +1238,13 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "Possible Input Types: " << std::endl;
 		std::cout << "  ubi_v3     Old simple chunk (version 3)" << std::endl;
 		std::cout << "  ubi_v5     Simple chunk (version 5)" << std::endl;
+		std::cout << "  ubi_v6     Simple chunk (version 6)" << std::endl;
 		std::cout << "  ubi_iv2    Old interleaved chunk (version 2)" << std::endl;
 		std::cout << "  ubi_iv8    Interleaved chunk (version 8)" << std::endl;
 		std::cout << "  ubi_iv9    Interleaved chunk (version 9)" << std::endl;
 		std::cout << "  ubi_6or4   Old UbiSoft 6-Or-4 bit chunk (XIII, SC1 PC)" << std::endl;
 		std::cout << "  ubi_raw    Raw compressed UbiSoft ADPCM" << std::endl;
-		std::cout << "  raw        Raw 16-bit uncompressed" << std::endl;
+		std::cout << "  raw        Raw 16-bit uncompressed PCM" << std::endl;
 		std::cout << "  ogg        Ogg Vorbis" << std::endl;
 		std::cout << std::endl;
 	}

@@ -45,9 +45,9 @@ bool CVersion5Stream::InitializeHeader(unsigned long SampleRate)
 		m_InputStream->SeekToBeginning();
 	}
 	m_InputStream->ExactRead(&m_Type, 1);
-	if(m_Type!=3 && m_Type!=5)
+	if(m_Type != 3 && m_Type != 5 && m_Type != 6)
 	{
-		throw(XFileException("File does not have the correct signature (should be 03 or 05)"));
+		throw(XFileException("File does not have the correct signature (should be 03, 05, or 06)"));
 	}
 
 	// Read the rest of the first header
@@ -62,6 +62,10 @@ bool CVersion5Stream::InitializeHeader(unsigned long SampleRate)
 	m_InputStream->ExactRead(&m_RightSample, 2);
 	m_InputStream->ExactRead(&m_RightIndex, 1);
 	m_InputStream->ExactIgnore(5);
+
+	// Version 6 has 8 extra bytes in the header
+	if (m_Type == 6)
+		m_InputStream->ExactIgnore(8);
 
 	// Theses are big-endian for some reason
 	if(m_Type==3)
@@ -103,6 +107,10 @@ bool CVersion5Stream::InitializeHeader(unsigned long SampleRate)
 			m_SampleRate=36000;
 		}
 		else if(m_Type==5)
+		{
+			m_SampleRate=48000;
+		}
+		else if(m_Type==6)
 		{
 			m_SampleRate=48000;
 		}

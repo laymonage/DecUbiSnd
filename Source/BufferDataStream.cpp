@@ -167,6 +167,22 @@ unsigned long CBufferDataStream::DoRead(void* Buffer, unsigned long Length, bool
 	return ReadLength;
 }
 
+unsigned long CBufferDataStream::DoPeek(void* Buffer, unsigned long Length, bool Exact)
+{
+	unsigned long Read = min(GetUsedBuffer(), Length);
+	
+	if (Read > 0)
+	{
+		// Emulate this with a read, and then we reset the buffer pointer
+		unsigned long OldBufferOffset = m_BufferOffset;
+		unsigned long Result;
+		Result = DoRead(Buffer, Length, Exact);
+		m_BufferOffset = OldBufferOffset;
+		return Result;
+	}
+	return 0;
+}
+
 bool CBufferDataStream::DoCanSeekBackward() const
 {
 	return false;
