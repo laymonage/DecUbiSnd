@@ -3,22 +3,10 @@
 */
 
 #pragma once
+#include "Decoding\UbiFormats.h"
 
 class CAudioStream;
 class CLayeredAudioStream;
-enum EUbiFormat
-{
-	EUF_NULL,
-	EUF_UBI_V3,
-	EUF_UBI_V5,
-	EUF_UBI_IV2,
-	EUF_UBI_IV8,
-	EUF_UBI_IV9,
-	EUF_UBI_6OR4,
-	EUF_UBI_RAW,
-	EUF_RAW,
-	EUF_OGG
-};
 
 namespace NDecGui
 {
@@ -37,6 +25,7 @@ namespace NDecFunc
 		unsigned char m_Channels;
 		unsigned long m_SampleRate;
 		std::vector<unsigned long> m_Layers;
+		std::vector<EUbiFormat> m_LayerTypes;
 		NDecGui::CSegmentsListView* m_ListView;
 		unsigned long m_ListViewIndex;
 
@@ -45,26 +34,28 @@ namespace NDecFunc
 		CSegment(std::string Filename, std::streamoff Offset, std::streamsize Size, \
 			EUbiFormat Type=EUF_NULL, unsigned char Channels=0, unsigned long SampleRate=0);
 		CSegment(const CSegment& Object);
-		virtual ~CSegment();
+		~CSegment();
 		//virtual operator=
 
-		virtual void SetFilename(std::string Filename);
-		virtual std::string GetFilename() const;
-		virtual void SetOffset(std::streamoff Offset);
-		virtual std::streamoff GetOffset() const;
-		virtual void SetSize(std::streamsize Size);
-		virtual std::streamsize GetSize() const;
-		virtual void SetType(EUbiFormat Type);
-		virtual EUbiFormat GetType() const;
-		virtual void SetChannels(unsigned char Channels);
-		virtual unsigned char GetChannels() const;
-		virtual void SetSampleRate(unsigned long SampleRate);
-		virtual unsigned long GetSampleRate() const;
-		virtual std::vector<unsigned long>& GetLayers();
-		virtual const std::vector<unsigned long>& GetLayers() const;
-		virtual void SetListView(NDecGui::CSegmentsListView* ListView);
-		virtual NDecGui::CSegmentsListView* GetListView() const;
-		virtual void SetListViewIndex(unsigned long Index);
-		virtual unsigned long GetListViewIndex() const;
+		void SetFilename(std::string Filename);
+		std::string GetFilename() const;
+		void SetOffset(std::streamoff Offset);
+		std::streamoff GetOffset() const;
+		void SetSize(std::streamsize Size);
+		std::streamsize GetSize() const;
+		void SetType(EUbiFormat Type);
+		EUbiFormat GetType() const;
+		void SetChannels(unsigned char Channels);
+		unsigned char GetChannels() const;
+		void SetSampleRate(unsigned long SampleRate);
+		unsigned long GetSampleRate() const;
+		std::vector<unsigned long>& GetLayers();
+		const std::vector<unsigned long>& GetLayers() const;
+		std::vector<EUbiFormat>& GetLayerTypes();
+		const std::vector<EUbiFormat>& GetLayerTypes() const;
+		void SetListView(NDecGui::CSegmentsListView* ListView);
+		NDecGui::CSegmentsListView* GetListView() const;
+		void SetListViewIndex(unsigned long Index);
+		unsigned long GetListViewIndex() const;
 	};
 };
