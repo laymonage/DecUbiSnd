@@ -17,6 +17,12 @@ The project was originally published on the [XeNTaX forums](https://web.archive.
 
 I reconstructed the provided releases into a git history and added the license file. I intend to use this repository as a fork of the original project to make it more usable on modern platforms.
 
+This repository contains three branches:
+
+- [`main`](https://github.com/laymonage/DecUbiSnd/tree/main): a combined codebase for `DecUbiSnd` + `DecUbiSndGui`, will be the main development branch moving forward.
+- [`legacy/DecUbiSnd`](https://github.com/laymonage/DecUbiSnd/tree/legacy/DecUbiSnd): the original source code for DecUbiSnd, plus the missing `6BitAdpcm.cpp` file, with README and license.
+- [`legacy/DecUbiSndGui`](https://github.com/laymonage/DecUbiSnd/tree/legacy/DecUbiSndGui): the original source code for DecUbiSndGui, plus the missing `6BitAdpcm.cpp` file, with README and license.
+
 ### Original credits
 
 Coded by Zench of the XeNTaX forums ([forum.xentax.com](https://forum.xentax.com)).
