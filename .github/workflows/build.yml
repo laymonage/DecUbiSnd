@@ -1,0 +1,44 @@
+name: Build and publish artifact
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v7.0.1
+
+      - name: Check out vcpkg baseline
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: microsoft/vcpkg
+          ref: 544a4c5c297e60e4ac4a5a1810df66748d908869
+          path: vcpkg
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Bootstrap vcpkg
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Install x86 dependencies
+        run: .\vcpkg\vcpkg.exe install --triplet x86-windows
+
+      - name: Build Release
+        run: msbuild .\DecUbiSnd.sln /m /p:Configuration=Release /p:Platform=x86 /verbosity:minimal
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: DecUbiSnd-win32
+          path: publish/DecUbiSnd/
+          if-no-files-found: error
+          retention-days: 14
