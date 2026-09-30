@@ -155,5 +155,18 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+    <Target Name="PackageRelease" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+      <PropertyGroup>
+        <PackageDir>$(MSBuildThisFileDirectory)..\publish\DecUbiSnd\</PackageDir>
+      </PropertyGroup>
+      <RemoveDir Directories="$(PackageDir)" Condition="Exists('$(PackageDir)')" />
+      <MakeDir Directories="$(PackageDir)licenses\libogg;$(PackageDir)licenses\libvorbis" />
+      <Copy SourceFiles="$(TargetPath);$(VcpkgInstalledDir)bin\ogg.dll;$(VcpkgInstalledDir)bin\vorbis.dll;$(VcpkgInstalledDir)bin\vorbisfile.dll;$(MSBuildThisFileDirectory)..\README.md;$(MSBuildThisFileDirectory)..\LICENSE"
+            DestinationFolder="$(PackageDir)" />
+      <Copy SourceFiles="$(VcpkgInstalledDir)share\libogg\copyright"
+            DestinationFolder="$(PackageDir)licenses\libogg" />
+      <Copy SourceFiles="$(VcpkgInstalledDir)share\libvorbis\copyright"
+            DestinationFolder="$(PackageDir)licenses\libvorbis" />
+      <Message Importance="high" Text="Release package created at $(PackageDir)" />
+    </Target>
 </Project>
-
