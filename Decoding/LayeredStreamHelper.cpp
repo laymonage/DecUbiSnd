@@ -175,13 +175,11 @@ bool CLayeredStreamHelper::DoDecodeBlock()
 
 void CLayeredStreamHelper::RegisterLayerParams()
 {
-	RegisterParam("Layer",
-		(TSetLongParamProc)&CLayeredStreamHelper::_SetCurrentLayer, NULL,
-		(TGetLongParamProc)&CLayeredStreamHelper::_GetCurrentLayer, NULL);
+	RegisterParam("Layer", static_cast<TSetLongParamProc>(&CLayeredStreamHelper::_SetCurrentLayer), NULL, static_cast<TGetLongParamProc>(&CLayeredStreamHelper::_GetCurrentLayer), NULL);
 	return;
 }
 
-bool CLayeredStreamHelper::_SetCurrentLayer(long Layer)
+bool CLayeredStreamHelper::_SetCurrentLayer(unsigned long Layer)
 {
 	if(Layer<1)
 	{
@@ -191,7 +189,7 @@ bool CLayeredStreamHelper::_SetCurrentLayer(long Layer)
 	return true;
 }
 
-long CLayeredStreamHelper::_GetCurrentLayer()
+unsigned long CLayeredStreamHelper::_GetCurrentLayer() const
 {
 	return GetCurrentLayer()+1;
 }

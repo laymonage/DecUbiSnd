@@ -9,8 +9,8 @@
 class CLayeredStreamHelper : public CStreamHelper
 {
 private:
-	bool _SetCurrentLayer(long Layer);
-	long _GetCurrentLayer();
+	bool _SetCurrentLayer(unsigned long Layer);
+	unsigned long _GetCurrentLayer() const;
 
 protected:
 	std::vector<unsigned long> m_CurrentLayers;

@@ -1,0 +1,55 @@
+# Visual Studio
+.vs/
+*.VC.db
+*.VC.VC.opendb
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+out/
+[Bb]in/
+[Oo]bj/
+
+# MSBuild / C++ intermediate files
+*.ipch
+*.pdb
+*.ilk
+*.idb
+*.iobj
+*.ipdb
+*.obj
+*.pch
+*.tlog
+*.lastbuildstate
+*.recipe
+*.log
+
+# CMake (if used)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Test / coverage artifacts
+TestResults/
+*.coverage
+*.coveragexml
+
+# NuGet / packages (legacy)
+packages/
+*.nupkg
+
+# vcpkg artifacts (manifest mode)
+vcpkg_installed/
+
+# OS files
+.DS_Store
+Thumbs.db
