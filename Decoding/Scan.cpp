@@ -4,8 +4,6 @@
 #include "Pch.h"
 #include "Scan.h"
 
-#include <wx/progdlg.h>
-
 #define SwapLong(_Value) (((unsigned long)(_Value)&0xFF000000)>>24 | ((unsigned long)(_Value)&0x00FF0000)>>8 | \
                         ((unsigned long)(_Value)&0x000000FF)<<24 | ((unsigned long)(_Value)&0x0000FF00)<<8)
 #define SwapShort(_Value) (((unsigned short)(_Value)&0xFF00)>>8 | (((unsigned short)(_Value)&0x00FF)<<8)
@@ -76,7 +74,9 @@ static bool CheckOggChunk(std::istream& Input, std::streamsize& FullSize)
 }
 
 // Do the actual scanning, to figure out roughly when the next audio is
-static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamoff EndOffset, std::streamsize& BytesRead, std::streamsize& FullSize)
+static bool DoScan(std::istream& Input, std::streamoff EndOffset,
+    std::streamsize& BytesRead, std::streamsize& FullSize,
+    TScanProgressCallback ProgressCallback, void* ProgressContext)
 {
     // Just check first
     if (Input.tellg()>=EndOffset)
@@ -106,21 +106,6 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
             NextRead=BytesLeft;
         }
 
-        // Set the progress
-        if (Progress)
-        {
-            unsigned long Value=(unsigned long long)CurrentOffset*100/EndOffset;
-            if (Value>100)
-            {
-                Value=100;
-            }
-            if (!Progress->Update(Value, _("Scanning...")))
-            {
-                delete [] Buffer;
-                return false;
-            }
-        }
-
         // This should not happen, but we'll check for it anyways
         if (!NextRead)
         {
@@ -130,6 +115,20 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
         // Read the data
         Input.read((char*)Buffer, (std::streamsize)NextRead);
         BytesLeft-=NextRead;
+
+        if (ProgressCallback)
+        {
+            unsigned long Value=(unsigned long long)CurrentOffset*100/EndOffset;
+            if (Value>100)
+            {
+                Value=100;
+            }
+            if (!ProgressCallback(ProgressContext, Value))
+            {
+                delete [] Buffer;
+                return false;
+            }
+        }
 
         // Process the data in a for loop
         std::streamoff OffsetReset=Input.tellg();
@@ -686,14 +685,16 @@ static bool DoScan(wxProgressDialog* Progress, std::istream& Input, std::streamo
 }
 
 // List the UbiSoft format audio chunks in the file
-bool ScanAndList(wxProgressDialog* Progress, std::istream& Input, std::vector<SFound>& FoundList, std::streamoff EndOffset)
+static bool ScanAndListInternal(std::istream& Input, std::vector<SFound>& FoundList,
+    std::streamoff EndOffset, TScanProgressCallback ProgressCallback,
+    void* ProgressContext)
 {
-    unsigned long NumberFound=0;
     std::streamsize BytesRead;
     std::streamsize SizeReadFromFile=0;
 
     // Scan for the first chunk
-    bool Found=DoScan(Progress, Input, EndOffset, BytesRead, SizeReadFromFile);
+        bool Found=DoScan(Input, EndOffset, BytesRead, SizeReadFromFile,
+            ProgressCallback, ProgressContext);
 
     // Loop, until we could find no more chunks
     while (Found)
@@ -716,7 +717,8 @@ bool ScanAndList(wxProgressDialog* Progress, std::istream& Input, std::vector<SF
         }
 
         // Scan for the next chunk
-        Found=DoScan(Progress, Input, EndOffset, BytesRead, SizeReadFromFile);
+        Found=DoScan(Input, EndOffset, BytesRead, SizeReadFromFile,
+            ProgressCallback, ProgressContext);
         if (Found)
         {
             // We already passed the header so we don't find it again
@@ -735,7 +737,8 @@ bool ScanAndList(wxProgressDialog* Progress, std::istream& Input, std::vector<SF
             // Skip to the next file; this one is too small
             // The next file cannot start at the next byte
             Input.seekg(29, std::ios_base::cur);
-            Found=DoScan(Progress, Input, EndOffset, BytesRead, SizeReadFromFile);
+                Found=DoScan(Input, EndOffset, BytesRead, SizeReadFromFile,
+                    ProgressCallback, ProgressContext);
             continue;
         }
 
@@ -752,7 +755,6 @@ bool ScanAndList(wxProgressDialog* Progress, std::istream& Input, std::vector<SF
         FoundList.push_back(Item);
 
         //std::cout << ChunkOffset << "\t" << ChunkSize;
-        NumberFound++;
 
         /*unsigned char Char[36];
         std::streamoff Prev=Input.tellg();
@@ -767,12 +769,30 @@ bool ScanAndList(wxProgressDialog* Progress, std::istream& Input, std::vector<SF
 
         //std::cout << std::endl;
     }
-    //std::cerr << "Found: " << NumberFound << std::endl;
-
     // If nothing was found, return false
     if (!Found)
     {
         return false;
     }
     return true;
+}
+
+bool ScanAndList(std::istream& Input, std::vector<SFound>& FoundList,
+        std::streamoff EndOffset, TScanProgressCallback ProgressCallback,
+        void* ProgressContext)
+{
+    return ScanAndListInternal(Input, FoundList, EndOffset, ProgressCallback,
+            ProgressContext);
+}
+
+bool ScanAndList(std::istream& Input, std::streamoff EndOffset)
+{
+    std::vector<SFound> FoundList;
+    bool Result=ScanAndListInternal(Input, FoundList, EndOffset, 0, 0);
+    for (std::vector<SFound>::const_iterator Iter=FoundList.begin();Iter!=FoundList.end();++Iter)
+    {
+        std::cout << Iter->Offset << "\t" << Iter->Size << std::endl;
+    }
+    std::cerr << "Found: " << FoundList.size() << std::endl;
+    return Result;
 }

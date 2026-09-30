@@ -21,6 +21,12 @@
 #include "Decoding/RawPcmStream.h"
 #include "Decoding/Scan.h"
 
+static bool UpdateScanProgress(void* Context, unsigned long Value)
+{
+	wxProgressDialog* Progress=static_cast<wxProgressDialog*>(Context);
+	return Progress->Update(Value, _("Scanning..."));
+}
+
 // CSegmentsList Implementation
 NDecFunc::CSegmentsList::CSegmentsList() :
 	m_Filename("")
@@ -69,7 +75,7 @@ void NDecFunc::CSegmentsList::ScanFile()
 
 	// Do the scan
 	std::vector<SFound> FoundList;
-	ScanAndList(&Progress, Input, FoundList, StreamSize);
+	ScanAndList(Input, FoundList, StreamSize, UpdateScanProgress, &Progress);
 
 	// Close the input file
 	Input.close();
