@@ -38,16 +38,16 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>18.0.11528.56</_ProjectFileVersion>
-    <VcpkgInstalledDir>$(MSBuildThisFileDirectory)..\vcpkg_installed\x86-windows\</VcpkgInstalledDir>
+    <VcpkgInstalledDir>$(MSBuildThisFileDirectory)vcpkg_installed\x86-windows\</VcpkgInstalledDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>Debug\</OutDir>
-    <IntDir>Debug\</IntDir>
+    <OutDir>Decoding\Debug\</OutDir>
+    <IntDir>Decoding\Debug\</IntDir>
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <OutDir>Release\</OutDir>
-    <IntDir>Release\</IntDir>
+    <OutDir>Decoding\Release\</OutDir>
+    <IntDir>Decoding\Release\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -61,7 +61,7 @@
       <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>ogg.lib;vorbis.lib;vorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -81,7 +81,7 @@
       <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>ogg.lib;vorbis.lib;vorbisfile.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -95,66 +95,62 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="6BitAdpcm.cpp" />
-    <ClCompile Include="ADPCM.cpp" />
-    <ClCompile Include="AudioExceptions.cpp" />
-    <ClCompile Include="AudioStream.cpp" />
-    <ClCompile Include="BufferDataStream.cpp" />
-    <ClCompile Include="DataExceptions.cpp" />
-    <ClCompile Include="DataStream.cpp" />
-    <ClCompile Include="FileDataStream.cpp" />
-    <ClCompile Include="Interleaved9Stream.cpp" />
-    <ClCompile Include="InterleavedStream.cpp" />
-    <ClCompile Include="LayeredStreamHelper.cpp" />
-    <ClCompile Include="Main.cpp" />
-    <ClCompile Include="OggVorbisStream.cpp" />
-    <ClCompile Include="Old6Or4BitStream.cpp" />
-    <ClCompile Include="OldInterleavedStream.cpp" />
+    <ClCompile Include="Decoding\6BitAdpcm.cpp" />
+    <ClCompile Include="Decoding\ADPCM.cpp" />
+    <ClCompile Include="Decoding\AudioExceptions.cpp" />
+    <ClCompile Include="Decoding\AudioStream.cpp" />
+    <ClCompile Include="Decoding\BufferDataStream.cpp" />
+    <ClCompile Include="Decoding\DataExceptions.cpp" />
+    <ClCompile Include="Decoding\DataStream.cpp" />
+    <ClCompile Include="Decoding\FileDataStream.cpp" />
+    <ClCompile Include="Decoding\Interleaved9Stream.cpp" />
+    <ClCompile Include="Decoding\InterleavedStream.cpp" />
+    <ClCompile Include="Decoding\LayeredStreamHelper.cpp" />
+    <ClCompile Include="Decoding\Main.cpp" />
+    <ClCompile Include="Decoding\OggVorbisStream.cpp" />
+    <ClCompile Include="Decoding\Old6Or4BitStream.cpp" />
+    <ClCompile Include="Decoding\OldInterleavedStream.cpp" />
     <ClCompile Include="Pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="RawCompressedStream.cpp" />
-    <ClCompile Include="RawPcmStream.cpp" />
-    <ClCompile Include="Scan.cpp" />
-    <ClCompile Include="Segment.cpp" />
-    <ClCompile Include="SegmentParser.cpp" />
-    <ClCompile Include="StreamHelper.cpp" />
-    <ClCompile Include="UbiFormats.cpp" />
-    <ClCompile Include="Version5Stream.cpp" />
-    <ClCompile Include="WaveWriter.cpp" />
+    <ClCompile Include="Decoding\RawCompressedStream.cpp" />
+    <ClCompile Include="Decoding\RawPcmStream.cpp" />
+    <ClCompile Include="Decoding\Scan.cpp" />
+    <ClCompile Include="Decoding\Segment.cpp" />
+    <ClCompile Include="Decoding\SegmentParser.cpp" />
+    <ClCompile Include="Decoding\StreamHelper.cpp" />
+    <ClCompile Include="Decoding\UbiFormats.cpp" />
+    <ClCompile Include="Decoding\Version5Stream.cpp" />
+    <ClCompile Include="Decoding\WaveWriter.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="6BitAdpcm.h" />
-    <ClInclude Include="ADPCM.h" />
-    <ClInclude Include="AudioExceptions.h" />
-    <ClInclude Include="AudioStream.h" />
-    <ClInclude Include="BufferDataStream.h" />
-    <ClInclude Include="DataExceptions.h" />
-    <ClInclude Include="DataStream.h" />
-    <ClInclude Include="FileDataStream.h" />
-    <ClInclude Include="Interleaved9Stream.h" />
-    <ClInclude Include="InterleavedStream.h" />
-    <ClInclude Include="LayeredStreamHelper.h" />
-    <ClInclude Include="OggVorbisStream.h" />
-    <ClInclude Include="Old6Or4BitStream.h" />
-    <ClInclude Include="OldInterleavedStream.h" />
+    <ClInclude Include="Decoding\6BitAdpcm.h" />
+    <ClInclude Include="Decoding\ADPCM.h" />
+    <ClInclude Include="Decoding\AudioExceptions.h" />
+    <ClInclude Include="Decoding\AudioStream.h" />
+    <ClInclude Include="Decoding\BufferDataStream.h" />
+    <ClInclude Include="Decoding\DataExceptions.h" />
+    <ClInclude Include="Decoding\DataStream.h" />
+    <ClInclude Include="Decoding\FileDataStream.h" />
+    <ClInclude Include="Decoding\Interleaved9Stream.h" />
+    <ClInclude Include="Decoding\InterleavedStream.h" />
+    <ClInclude Include="Decoding\LayeredStreamHelper.h" />
+    <ClInclude Include="Decoding\OggVorbisStream.h" />
+    <ClInclude Include="Decoding\Old6Or4BitStream.h" />
+    <ClInclude Include="Decoding\OldInterleavedStream.h" />
     <ClInclude Include="Pch.h" />
-    <ClInclude Include="RawCompressedStream.h" />
-    <ClInclude Include="RawPcmStream.h" />
-    <ClInclude Include="Scan.h" />
-    <ClInclude Include="Segment.h" />
-    <ClInclude Include="SegmentParser.h" />
-    <ClInclude Include="StreamHelper.h" />
-    <ClInclude Include="UbiFormats.h" />
-    <ClInclude Include="Version5Stream.h" />
-    <ClInclude Include="WaveWriter.h" />
+    <ClInclude Include="Decoding\RawCompressedStream.h" />
+    <ClInclude Include="Decoding\RawPcmStream.h" />
+    <ClInclude Include="Decoding\Scan.h" />
+    <ClInclude Include="Decoding\Segment.h" />
+    <ClInclude Include="Decoding\SegmentParser.h" />
+    <ClInclude Include="Decoding\StreamHelper.h" />
+    <ClInclude Include="Decoding\UbiFormats.h" />
+    <ClInclude Include="Decoding\Version5Stream.h" />
+    <ClInclude Include="Decoding\WaveWriter.h" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include=".gitignore" />
-  </ItemGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+    <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
-
