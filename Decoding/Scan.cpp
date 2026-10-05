@@ -329,7 +329,7 @@ static bool DoScan(std::istream& Input, std::streamoff EndOffset, std::streamsiz
                     std::streamoff LastValidOffset;
                     bool Done=false;
                     bool FoundABlock=false;
-                    while (!Input.eof())
+                    while (Input.good())
                     {
                         for (unsigned long i=0;i<Char[44];i++)
                         {
