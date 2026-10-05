@@ -5,7 +5,6 @@
 #include "Pch.h"
 
 #include <wx/filename.h>
-#include <wx/mmedia/sndwin.h>
 
 #include "Gui/App.h"
 #include "Gui/MainDialog.h"
@@ -60,11 +59,10 @@ END_EVENT_TABLE()
 
 // CMainDialog Implementation
 NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wxSize& Size) :
-	wxDialog(Parent, wxID_ANY, _("Decode UbiSoft Sounds/Music version " DECUBISND_VERSION), Pos, Size, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER|wxMAXIMIZE_BOX|wxMINIMIZE_BOX|wxTHICK_FRAME),
+	wxDialog(Parent, wxID_ANY, _("Decode UbiSoft Sounds/Music version " DECUBISND_VERSION), Pos, Size, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER|wxMAXIMIZE_BOX|wxMINIMIZE_BOX),
 	m_FilesList(NULL),
 	m_Update(0),
 	m_NoMagic(false),
-	m_Playback(NULL),
 	m_Stream(NULL),
 	m_Sound(NULL),
 	m_SoundUpdate(this)
@@ -164,8 +162,6 @@ NDecGui::CMainDialog::~CMainDialog()
 	m_Sound=NULL;
 	delete m_Stream;
 	m_Stream=NULL;
-	delete m_Playback;
-	m_Playback=NULL;
 	delete m_FilesList;
 	m_FilesList=NULL;
 	return;
@@ -410,7 +406,7 @@ void NDecGui::CMainDialog::OnScanDirectoryButtonClicked(wxCommandEvent& Event)
 
 		// Scan
 		wxFileName Filedir(Dlg.GetPath(), wxT("*"), wxT("*"));
-		m_FilesList->Scan(Filedir.GetPath(true).mb_str());
+		m_FilesList->Scan(std::string(Filedir.GetPath(true).mb_str()));
 
 		// Update
 		m_FileList->RefreshData();
@@ -464,7 +460,7 @@ void NDecGui::CMainDialog::OnScanFileButtonClicked(wxCommandEvent& Event)
 			// Create the new segment list
 			NDecFunc::CSegmentsList* SegmentList=new NDecFunc::CSegmentsList;
 			m_FilesList->Add(SegmentList);
-			SegmentList->SetFilename(Dlg.GetPath().mb_str());
+			SegmentList->SetFilename(std::string(Dlg.GetPath().mb_str()));
 
 			// Scan into this file
 			SegmentList->Clear();
@@ -472,7 +468,7 @@ void NDecGui::CMainDialog::OnScanFileButtonClicked(wxCommandEvent& Event)
 
 			// Set the selection to this file and this segment
 			TListSelection Sel;
-			Sel.push_back(i);
+			Sel.push_back(m_FilesList->GetCount()-1);
 			m_FileList->RefreshGui();
 			m_FileList->SetSelection(Sel);
 		}
@@ -553,7 +549,7 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 			// Create the new segment list
 			NDecFunc::CSegmentsList* SegmentList=new NDecFunc::CSegmentsList;
 			m_FilesList->Add(SegmentList);
-			SegmentList->SetFilename(Dlg.GetFilename().mb_str());
+			SegmentList->SetFilename(std::string(Dlg.GetFilename().mb_str()));
 
 			// Insert a new segment
 			unsigned long InsertPos;
@@ -571,7 +567,7 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 
 			// Set the selection to this file and this segment
 			TListSelection Sel;
-			Sel.push_back(i);
+			Sel.push_back(m_FilesList->GetCount()-1);
 			m_FileList->RefreshGui();
 			m_FileList->SetSelection(Sel);
 			m_FileList->RefreshGui();
@@ -808,10 +804,6 @@ void NDecGui::CMainDialog::OnLoopButtonClicked(wxCommandEvent& Event)
 
 void NDecGui::CMainDialog::OnStopButtonClicked(wxCommandEvent& Event)
 {
-	if(m_Playback)
-	{
-		m_Playback->ForceStop(true);
-	}
 	m_StopButton->Enable(false);
 	Stop();
 	return;
@@ -861,7 +853,7 @@ void NDecGui::CMainDialog::OnConcatenatedButtonClicked(wxCommandEvent& Event)
 		m_OutputDir=Dlg.GetDirectory();
 
 		// Output it
-		NDecFunc::OutputConcatenated(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputConcatenated(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 	return;
 }
@@ -908,7 +900,7 @@ void NDecGui::CMainDialog::OnSeparateButtonClicked(wxCommandEvent& Event)
 		m_OutputDir=Dlg.GetPath();
 
 		// Output it
-		NDecFunc::OutputSeparate(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputSeparate(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 	return;
 }
@@ -955,7 +947,7 @@ void NDecGui::CMainDialog::OnLayerExtractButtonClicked(wxCommandEvent& Event)
 		m_OutputDir=Dlg.GetPath();
 
 		// Output it
-		NDecFunc::OutputLayerExtract(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputLayerExtract(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 	return;
 }
@@ -993,7 +985,6 @@ void NDecGui::CMainDialog::Play(bool Looping)
 	if(m_Sound)
 	{
 		// Stop it
-		m_Playback->ForceStop(true);
 		m_SoundUpdate.Stop();
 		m_SoundTimer.Pause();
 		m_Sound->Stop();
@@ -1042,18 +1033,11 @@ void NDecGui::CMainDialog::Play(bool Looping)
 		m_Stream->Get(m_Stream->GetCount()-1)->SetListViewIndex(*Iter);
 	}
 
-	// Create the player if it doesn't already exist
-	if(!m_Playback)
-	{
-		m_Playback=new wxSoundStreamWin;
-	}
-
 	// Create the segment sound stream
-	m_Sound=new CSegmentStreamSound(*m_Stream, *m_Playback);
+	m_Sound=new CSegmentStreamSound(*m_Stream);
 	m_Sound->SetLooping(Looping);
 
 	// Start it playing
-	m_Playback->ForceStop(false);
 	m_Sound->Play();
 	m_SoundUpdate.Start(1000);
 	m_SoundTimer.Start();
@@ -1066,7 +1050,7 @@ void NDecGui::CMainDialog::Play(bool Looping)
 bool NDecGui::CMainDialog::IsPlaying() const
 {
 	// Check the current state
-	if(!m_Playback || !m_Stream || !m_Sound)
+	if(!m_Stream || !m_Sound)
 	{
 		return false;
 	}
@@ -1085,7 +1069,6 @@ void NDecGui::CMainDialog::Stop()
 	}
 
 	// Stop it
-	m_Playback->ForceStop(true);
 	m_SoundUpdate.Stop();
 	m_SoundTimer.Pause();
 	m_Sound->Stop();

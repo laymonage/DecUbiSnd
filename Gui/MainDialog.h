@@ -6,7 +6,6 @@
 
 #include <wx/listctrl.h>
 
-class wxSoundStreamWin;
 namespace NDecFunc
 {
 	class CFilesList;
@@ -59,8 +58,7 @@ namespace NDecGui
 		wxString m_InputDir;
 		wxString m_OutputDir;
 
-		wxSoundStreamWin* m_Playback;
-		NDecFunc::CSegmentStream* m_Stream;
+			NDecFunc::CSegmentStream* m_Stream;
 		CSegmentStreamSound* m_Sound;
 		wxTimer m_SoundUpdate;
 		wxStopWatch m_SoundTimer;

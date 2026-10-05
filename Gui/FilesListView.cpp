@@ -15,7 +15,7 @@
 class CAttachImageList : public wxImageList
 {
 public:
-	CAttachImageList(HIMAGELIST hImageList)
+	CAttachImageList(WXHIMAGELIST hImageList)
 	{
 		m_hImageList=hImageList;
 	}
@@ -129,13 +129,13 @@ int NDecGui::CFilesListView::OnGetItemImage(long Item) const
 	// Get the icon
 	SHFILEINFO FileInfo;
 	HIMAGELIST hImageList;
-	hImageList=(HIMAGELIST)SHGetFileInfo(SegmentsList.GetFilename().c_str(), 0, &FileInfo, \
+	hImageList=(HIMAGELIST)SHGetFileInfo(wxString(SegmentsList.GetFilename()).wc_str(), 0, &FileInfo, \
 		sizeof(SHFILEINFO), SHGFI_SYSICONINDEX);
 
 	// Create a new image list
 	if(!GetImageList(wxIMAGE_LIST_SMALL))
 	{
-		wxImageList* SystemImageList=new CAttachImageList(hImageList);
+		wxImageList* SystemImageList=new CAttachImageList((WXHIMAGELIST)hImageList);
 		((CFilesListView*)this)->AssignImageList(SystemImageList, wxIMAGE_LIST_SMALL);
 	}
 	return FileInfo.iIcon;

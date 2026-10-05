@@ -6,19 +6,7 @@
 
 class CAudioStream;
 class CLayeredAudioStream;
-enum EUbiFormat
-{
-	EUF_NULL,
-	EUF_UBI_V3,
-	EUF_UBI_V5,
-	EUF_UBI_IV2,
-	EUF_UBI_IV8,
-	EUF_UBI_IV9,
-	EUF_UBI_6OR4,
-	EUF_UBI_RAW,
-	EUF_RAW,
-	EUF_OGG
-};
+#include "Decoding/UbiFormats.h"
 
 namespace NDecGui
 {

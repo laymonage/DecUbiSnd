@@ -4,41 +4,27 @@
 
 #include "Pch.h"
 
-#include <wx/apptrait.h>
-#include <wx/stdpaths.h>
-#include <wx/wfstream.h>
-#include <wx/mmedia/sndpcm.h>
-
-#include "Gui/App.h"
 #include "Gui/SegmentStreamSound.h"
 #include "Functionality/Segment.h"
 #include "Functionality/SegmentStream.h"
 
 // NDecGui Implementation
-NDecGui::CSegmentStreamSound::CSegmentStreamSound(NDecFunc::CSegmentStream& Stream, wxSoundStream& IoStream) :
-	m_File(wxGetApp().GetTraits()->GetStandardPaths().GetExecutablePath(), wxT("rb")),
-	wxSoundFileStream(m_File, IoStream),
+NDecGui::CSegmentStreamSound::CSegmentStreamSound(NDecFunc::CSegmentStream& Stream) :
 	m_Stream(Stream),
 	m_Looping(false),
-	m_ExtraSamples(0)
+	m_ExtraSamples(0),
+	m_WaveOut(NULL),
+	m_Playing(false),
+	m_EndOfStream(false)
 {
+	memset(m_Headers, 0, sizeof(m_Headers));
 	return;
 }
 
 NDecGui::CSegmentStreamSound::~CSegmentStreamSound()
 {
+	Stop();
 	return;
-}
-
-bool NDecGui::CSegmentStreamSound::CanRead()
-{
-	// We can always read
-	return true;
-}
-
-wxString NDecGui::CSegmentStreamSound::GetCodecName() const
-{
-	return wxT("SegmentStream: UbiSoft Audio Decoder");
 }
 
 void NDecGui::CSegmentStreamSound::SetLooping(bool Looping)
@@ -52,10 +38,16 @@ bool NDecGui::CSegmentStreamSound::IsLooping() const
 	return m_Looping;
 }
 
-bool NDecGui::CSegmentStreamSound::PrepareToPlay()
+bool NDecGui::CSegmentStreamSound::IsStopped() const
 {
-	// Get the next segment
-	wxSoundFormatPcm SoundFormat;
+	return !m_Playing;
+}
+
+bool NDecGui::CSegmentStreamSound::Play()
+{
+	Stop();
+
+	// Get the first segment
 	NDecFunc::CSegment* Segment=m_Stream.GetCurrentSegment();
 	if(!Segment)
 	{
@@ -63,100 +55,177 @@ bool NDecGui::CSegmentStreamSound::PrepareToPlay()
 	}
 
 	// Set up the sound format
-	SoundFormat.SetSampleRate(Segment->GetSampleRate());
-	SoundFormat.SetBPS(16);
-	SoundFormat.SetChannels(Segment->GetChannels());
-	SoundFormat.Signed(true);
-	SoundFormat.SetOrder(wxLITTLE_ENDIAN);
-
-	if(!SetSoundFormat(SoundFormat))
+	unsigned long SampleRate=Segment->GetSampleRate();
+	unsigned long Channels=Segment->GetChannels();
+	if(!SampleRate || !Channels)
 	{
 		return false;
 	}
+	WAVEFORMATEX Format;
+	memset(&Format, 0, sizeof(Format));
+	Format.wFormatTag=WAVE_FORMAT_PCM;
+	Format.nChannels=(WORD)Channels;
+	Format.nSamplesPerSec=SampleRate;
+	Format.wBitsPerSample=16;
+	Format.nBlockAlign=(WORD)(Format.nChannels*Format.wBitsPerSample/8);
+	Format.nAvgBytesPerSec=Format.nSamplesPerSec*Format.nBlockAlign;
+	if(waveOutOpen(&m_WaveOut, WAVE_MAPPER, &Format, 0, 0, CALLBACK_NULL)!=MMSYSERR_NOERROR)
+	{
+		m_WaveOut=NULL;
+		return false;
+	}
 
-	m_ExtraSamples=Segment->GetSampleRate()*Segment->GetChannels();
-	FinishPreparation(GetBestSize());
+	// One second of silence is appended at the end
+	m_ExtraSamples=SampleRate*Channels;
+	m_EndOfStream=false;
+
+	// Prepare and queue the buffers
+	unsigned long BufferSamples=SampleRate*BufferMilliseconds/1000*Channels;
+	for(unsigned long i=0;i<NumberBuffers;i++)
+	{
+		m_Buffers[i].assign(BufferSamples, 0);
+		memset(&m_Headers[i], 0, sizeof(WAVEHDR));
+		m_Headers[i].lpData=(LPSTR)&m_Buffers[i][0];
+		m_Headers[i].dwBufferLength=BufferSamples*2;
+		if(waveOutPrepareHeader(m_WaveOut, &m_Headers[i], sizeof(WAVEHDR))!=MMSYSERR_NOERROR)
+		{
+			m_Headers[i].dwFlags=0;
+			Close();
+			return false;
+		}
+	}
+	m_Playing=true;
+	waveOutPause(m_WaveOut);
+	for(unsigned long i=0;i<NumberBuffers;i++)
+	{
+		Fill(i);
+	}
+	waveOutRestart(m_WaveOut);
+	if(!m_Playing)
+	{
+		Close();
+		return false;
+	}
+
+	wxTimer::Start(BufferMilliseconds/2);
 	return true;
 }
 
-bool NDecGui::CSegmentStreamSound::PrepareToRecord(wxUint32 Time)
+void NDecGui::CSegmentStreamSound::Stop()
 {
-	// We cannot record
-	return false;
+	wxTimer::Stop();
+	Close();
+	return;
 }
 
-bool NDecGui::CSegmentStreamSound::FinishRecording()
+void NDecGui::CSegmentStreamSound::Close()
 {
-	// We cannot record
-	return false;
+	m_Playing=false;
+	if(m_WaveOut)
+	{
+		waveOutReset(m_WaveOut);
+		for(unsigned long i=0;i<NumberBuffers;i++)
+		{
+			if(m_Headers[i].dwFlags & WHDR_PREPARED)
+			{
+				waveOutUnprepareHeader(m_WaveOut, &m_Headers[i], sizeof(WAVEHDR));
+			}
+		}
+		waveOutClose(m_WaveOut);
+		m_WaveOut=NULL;
+	}
+	memset(m_Headers, 0, sizeof(m_Headers));
+	return;
 }
 
-bool NDecGui::CSegmentStreamSound::RepositionStream(wxUint32 Position)
+// Queue a buffer, returns false if the stream is finished
+bool NDecGui::CSegmentStreamSound::Fill(unsigned long Index)
 {
-	// We cannot seek
-	return false;
+	if(m_EndOfStream)
+	{
+		return false;
+	}
+	unsigned long Samples=GetData(&m_Buffers[Index][0], (unsigned long)m_Buffers[Index].size());
+	if(!Samples)
+	{
+		m_EndOfStream=true;
+		return false;
+	}
+	m_Headers[Index].dwBufferLength=Samples*2;
+	m_Headers[Index].dwFlags&=~WHDR_DONE;
+	if(waveOutWrite(m_WaveOut, &m_Headers[Index], sizeof(WAVEHDR))!=MMSYSERR_NOERROR)
+	{
+		m_EndOfStream=true;
+		return false;
+	}
+	return true;
 }
 
-wxUint32 NDecGui::CSegmentStreamSound::GetData(void *Buffer, wxUint32 Size)
+void NDecGui::CSegmentStreamSound::Notify()
+{
+	if(!m_Playing)
+	{
+		return;
+	}
+
+	// Refill finished buffers, and see if anything is still queued
+	bool Queued=false;
+	for(unsigned long i=0;i<NumberBuffers;i++)
+	{
+		if(m_Headers[i].dwFlags & WHDR_DONE)
+		{
+			if(!Fill(i))
+			{
+				m_Headers[i].dwFlags&=~WHDR_DONE;
+			}
+		}
+		if((m_Headers[i].dwFlags & WHDR_INQUEUE) && !(m_Headers[i].dwFlags & WHDR_DONE))
+		{
+			Queued=true;
+		}
+	}
+
+	if(!Queued)
+	{
+		// Everything has been played
+		wxTimer::Stop();
+		Close();
+	}
+	return;
+}
+
+unsigned long NDecGui::CSegmentStreamSound::GetData(short* Buffer, unsigned long NumberSamples)
 {
 	// Decode some samples
-	unsigned long SampleToDecode=Size/2;
-	unsigned long SamplesDecoded=SampleToDecode;
-	if(!m_Stream.Decode((short*)Buffer, SamplesDecoded))
+	unsigned long SamplesDecoded=NumberSamples;
+	if(!m_Stream.Decode(Buffer, SamplesDecoded))
 	{
-		// End the stream right here
-		m_bytes_left=0;
-		return SamplesDecoded*2;
+		return SamplesDecoded;
 	}
 
 	// If we are looping, look for more
-	if(m_Looping && SamplesDecoded<SampleToDecode)
+	if(m_Looping && SamplesDecoded<NumberSamples)
 	{
-		unsigned long NewDecoded=SampleToDecode-SamplesDecoded;
+		unsigned long NewDecoded=NumberSamples-SamplesDecoded;
 		m_Stream.Restart();
-		if(!m_Stream.Decode((short*)Buffer+SamplesDecoded, NewDecoded))
+		if(!m_Stream.Decode(Buffer+SamplesDecoded, NewDecoded))
 		{
-			// End the stream right here
-			m_bytes_left=0;
-			return SamplesDecoded*2;
+			return SamplesDecoded;
 		}
 		SamplesDecoded+=NewDecoded;
 	}
 
 	// Check to see if we need to add any extra samples
-	if(SamplesDecoded<SampleToDecode && m_ExtraSamples)
+	if(SamplesDecoded<NumberSamples && m_ExtraSamples)
 	{
-		unsigned long RequestedSamples;
-		RequestedSamples=SampleToDecode-SamplesDecoded;
-
-		if(m_ExtraSamples>RequestedSamples)
+		unsigned long Extra=NumberSamples-SamplesDecoded;
+		if(Extra>m_ExtraSamples)
 		{
-			memset((char*)Buffer+(SamplesDecoded*2), 0, RequestedSamples*2);
-			SamplesDecoded+=RequestedSamples;
-			m_ExtraSamples-=RequestedSamples;
+			Extra=m_ExtraSamples;
 		}
-		else
-		{
-			memset((char*)Buffer+(SamplesDecoded*2), 0, m_ExtraSamples*2);
-			SamplesDecoded+=m_ExtraSamples;
-			m_ExtraSamples=0;
-		}
+		memset(Buffer+SamplesDecoded, 0, Extra*2);
+		SamplesDecoded+=Extra;
+		m_ExtraSamples-=Extra;
 	}
-
-	// Just a little hack
-	if(SamplesDecoded)
-	{
-		m_bytes_left+=SamplesDecoded*2;
-	}
-	else
-	{
-		m_bytes_left=0;
-	}
-	return SamplesDecoded*2;
-}
-
-wxUint32 NDecGui::CSegmentStreamSound::PutData(const void *Buffer, wxUint32 Size)
-{
-	// We cannot write data to file
-	return 0;
+	return SamplesDecoded;
 }
