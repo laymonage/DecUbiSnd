@@ -35,6 +35,7 @@ runs:
         VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
       run: |
         New-Item $env:VCPKG_DEFAULT_BINARY_CACHE -ItemType Directory -Force | Out-Null
-        $features = if ('${{ inputs.gui }}' -eq 'true') { '--x-feature=gui' } else { @() }
+        $features = @()
+        if ('${{ inputs.gui }}' -eq 'true') { $features += '--x-feature=gui' }
         .\vcpkg\vcpkg.exe install --triplet x86-windows @features
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
