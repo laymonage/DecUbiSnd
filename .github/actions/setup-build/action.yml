@@ -1,0 +1,41 @@
+name: Set up build environment
+description: Installs MSBuild and the vcpkg dependencies (x86) for DecUbiSnd
+
+inputs:
+  gui:
+    description: Also install the wxWidgets dependencies needed by the GUI
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Check out vcpkg
+      uses: actions/checkout@v7.0.1
+      with:
+        repository: microsoft/vcpkg
+        ref: 2026.07.29
+        path: vcpkg
+
+    - name: Set up MSBuild
+      uses: microsoft/setup-msbuild@v3.0.0
+
+    - name: Cache vcpkg binaries
+      uses: actions/cache@v6.1.0
+      with:
+        path: vcpkg-cache
+        key: vcpkg-x86-gui-${{ inputs.gui }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+
+    - name: Bootstrap vcpkg
+      shell: pwsh
+      run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+    - name: Install x86 dependencies
+      shell: pwsh
+      env:
+        VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+      run: |
+        New-Item $env:VCPKG_DEFAULT_BINARY_CACHE -ItemType Directory -Force | Out-Null
+        $features = @()
+        if ('${{ inputs.gui }}' -eq 'true') { $features += '--x-feature=gui' }
+        .\vcpkg\vcpkg.exe install --triplet x86-windows @features
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
