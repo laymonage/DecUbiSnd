@@ -2,5 +2,14 @@
   "dependencies": [
     "libvorbis",
     "libogg"
-  ]
+  ],
+  "features": {
+    "gui": {
+      "description": "Dependencies for the DecUbiSndGui target",
+      "dependencies": [
+        "wxwidgets",
+        "portaudio"
+      ]
+    }
+  }
 }

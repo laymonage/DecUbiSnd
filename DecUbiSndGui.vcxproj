@@ -1,0 +1,143 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <ProjectGuid>{2D6C1B7E-5F0A-4C57-9A53-0E8D3B6A9C41}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>DecUbiSndGui</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <VcpkgInstalledDir>$(MSBuildThisFileDirectory)vcpkg_installed\x86-windows\</VcpkgInstalledDir>
+    <TargetName>DecUbiSndGui</TargetName>
+    <OutDir>Gui\$(Configuration)\</OutDir>
+    <IntDir>Gui\$(Configuration)\obj\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;__WXMSW__;WXUSINGDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
+      <WarningLevel>Level3</WarningLevel>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>__WXMSW__;WXUSINGDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>winmm.lib;comctl32.lib;rpcrt4.lib;ogg.lib;vorbis.lib;vorbisfile.lib;portaudio.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;__WXDEBUG__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)debug\lib\mswud;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)debug\lib\mswud;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(VcpkgInstalledDir)debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxbase33ud.lib;wxmsw33ud_core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)lib\mswu;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)lib\mswu;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(VcpkgInstalledDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>wxbase33u.lib;wxmsw33u_core.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+  </ItemDefinitionGroup>
+  <PropertyGroup>
+    <VcpkgBinDir>$(VcpkgInstalledDir)bin\</VcpkgBinDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <VcpkgBinDir>$(VcpkgInstalledDir)debug\bin\</VcpkgBinDir>
+  </PropertyGroup>
+  <Target Name="CopyRuntimeDlls" AfterTargets="Build">
+    <ItemGroup>
+      <RuntimeDll Include="$(VcpkgBinDir)*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RuntimeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <ItemGroup>
+    <ClCompile Include="Pch.cpp"><PrecompiledHeader>Create</PrecompiledHeader></ClCompile>
+    <ClCompile Include="Gui\AddManuallyDialog.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Gui\App.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Gui\AppListView.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Gui\FilesListView.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Gui\MainDialog.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Gui\SegmentsListView.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Gui\SetInfoDialog.cpp"><ObjectFileName>$(IntDir)Gui\</ObjectFileName></ClCompile>
+    <ClCompile Include="Functionality\FilesList.cpp"><ObjectFileName>$(IntDir)Functionality\</ObjectFileName></ClCompile>
+    <ClCompile Include="Functionality\Output.cpp"><ObjectFileName>$(IntDir)Functionality\</ObjectFileName></ClCompile>
+    <ClCompile Include="Functionality\Segment.cpp"><ObjectFileName>$(IntDir)Functionality\</ObjectFileName></ClCompile>
+    <ClCompile Include="Functionality\SegmentsList.cpp"><ObjectFileName>$(IntDir)Functionality\</ObjectFileName></ClCompile>
+    <ClCompile Include="Functionality\SegmentStream.cpp"><ObjectFileName>$(IntDir)Functionality\</ObjectFileName></ClCompile>
+    <ClCompile Include="Sound\AudioPlayer.cpp"><ObjectFileName>$(IntDir)Sound\</ObjectFileName></ClCompile>
+    <ClCompile Include="Sound\PortAudioWrapper.cpp"><ObjectFileName>$(IntDir)Sound\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\6BitAdpcm.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\Adpcm.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\AudioExceptions.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\AudioStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\BufferDataStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\DataExceptions.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\DataStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\FileDataStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\Interleaved9Stream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\InterleavedStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\LayeredStreamHelper.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\OggVorbisStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\Old6Or4BitStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\OldInterleavedStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\RawCompressedStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\RawPcmStream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\Scan.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\Segment.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\SegmentParser.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\UbiFormats.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\StreamHelper.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\Version5Stream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+    <ClCompile Include="Decoding\WaveWriter.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Windows.rc" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

@@ -60,7 +60,7 @@ END_EVENT_TABLE()
 
 // CMainDialog Implementation
 NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wxSize& Size) :
-	wxDialog(Parent, wxID_ANY, _("Decode UbiSoft Sounds/Music version " DECUBISND_VERSION), Pos, Size, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER|wxMAXIMIZE_BOX|wxMINIMIZE_BOX|wxTHICK_FRAME),
+	wxDialog(Parent, wxID_ANY, _("Decode UbiSoft Sounds/Music version " DECUBISND_VERSION), Pos, Size, wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER|wxMAXIMIZE_BOX|wxMINIMIZE_BOX),
 	m_FilesList(NULL),
 	m_Update(0),
 	m_NoMagic(false),
@@ -415,7 +415,7 @@ void NDecGui::CMainDialog::OnScanDirectoryButtonClicked(wxCommandEvent& Event)
 
 		// Scan
 		wxFileName Filedir(Dlg.GetPath(), wxT("*"), wxT("*"));
-		m_FilesList->Scan(Filedir.GetPath(true).mb_str());
+		m_FilesList->Scan(std::string(Filedir.GetPath(true).mb_str()));
 
 		// Update
 		m_FileList->RefreshData();
@@ -475,7 +475,7 @@ void NDecGui::CMainDialog::OnScanFileButtonClicked(wxCommandEvent& Event)
 				// Create the new segment list
 				NDecFunc::CSegmentsList* SegmentList=new NDecFunc::CSegmentsList;
 				m_FilesList->Add(SegmentList);
-				SegmentList->SetFilename(iter->mb_str());
+				SegmentList->SetFilename(std::string(iter->mb_str()));
 
 				// Scan into this file
 				SegmentList->Clear();
@@ -483,7 +483,7 @@ void NDecGui::CMainDialog::OnScanFileButtonClicked(wxCommandEvent& Event)
 
 				// Set the selection to this file and this segment
 				TListSelection Sel;
-				Sel.push_back(i);
+				Sel.push_back(m_FilesList->GetCount()-1);
 				m_FileList->RefreshGui();
 				m_FileList->SetSelection(Sel);
 			}
@@ -566,7 +566,7 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 			// Create the new segment list
 			NDecFunc::CSegmentsList* SegmentList=new NDecFunc::CSegmentsList;
 			m_FilesList->Add(SegmentList);
-			SegmentList->SetFilename(Dlg.GetFilename().mb_str());
+			SegmentList->SetFilename(std::string(Dlg.GetFilename().mb_str()));
 
 			// Insert a new segment
 			unsigned long InsertPos;
@@ -584,7 +584,7 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 
 			// Set the selection to this file and this segment
 			TListSelection Sel;
-			Sel.push_back(i);
+			Sel.push_back(m_FilesList->GetCount()-1);
 			m_FileList->RefreshGui();
 			m_FileList->SetSelection(Sel);
 			m_FileList->RefreshGui();
@@ -856,7 +856,7 @@ void NDecGui::CMainDialog::OnSaveAsButtonClicked(wxCommandEvent& Event)
 		// Save the default directory
 		m_OutputDir=Dlg.GetDirectory();
 
-		NDecFunc::OutputBest(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputBest(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 }
 
@@ -903,7 +903,7 @@ void NDecGui::CMainDialog::OnSaveToWavButtonClicked(wxCommandEvent& Event)
 		// Save the default directory
 		m_OutputDir=Dlg.GetDirectory();
 
-		NDecFunc::OutputSeparate(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputSeparate(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 	return;
 }
@@ -952,7 +952,7 @@ void NDecGui::CMainDialog::OnSpliceToWavButtonClicked(wxCommandEvent& Event)
 		m_OutputDir=Dlg.GetDirectory();
 
 		// Output it
-		NDecFunc::OutputConcatenated(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputConcatenated(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 	return;
 }
@@ -1001,7 +1001,7 @@ void NDecGui::CMainDialog::OnExtractAsButtonClicked(wxCommandEvent& Event)
 		m_OutputDir=Dlg.GetDirectory();
 
 		// Output it
-		NDecFunc::OutputLayerExtract(Dlg.GetPath().mb_str(), Segments);
+		NDecFunc::OutputLayerExtract(std::string(Dlg.GetPath().mb_str()), Segments);
 	}
 	return;
 }
