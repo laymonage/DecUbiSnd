@@ -1,4 +1,4 @@
-name: Build and publish artifact
+name: Build
 
 on:
   push:
@@ -10,35 +10,39 @@ permissions:
 
 jobs:
   build:
+    name: ${{ matrix.target }} (${{ matrix.configuration }})
     runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [cli, gui]
+        configuration: [Debug, Release]
+        include:
+          - target: cli
+            project: DecUbiSnd.vcxproj
+          - target: gui
+            project: DecUbiSndGui.vcxproj
 
     steps:
       - name: Check out project
         uses: actions/checkout@v7.0.1
 
-      - name: Check out vcpkg baseline
-        uses: actions/checkout@v7.0.1
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build
         with:
-          repository: microsoft/vcpkg
-          ref: 544a4c5c297e60e4ac4a5a1810df66748d908869
-          path: vcpkg
+          gui: ${{ matrix.target == 'gui' }}
 
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v3
+      - name: Build
+        run: msbuild .\${{ matrix.project }} /m /p:Configuration=${{ matrix.configuration }} /p:Platform=Win32 /verbosity:minimal
 
-      - name: Bootstrap vcpkg
-        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
-      - name: Install x86 dependencies
-        run: .\vcpkg\vcpkg.exe install --triplet x86-windows
-
-      - name: Build Release
-        run: msbuild .\DecUbiSnd.sln /m /p:Configuration=Release /p:Platform=x86 /verbosity:minimal
+      - name: Package
+        run: .\.github\scripts\package.ps1 -Configuration ${{ matrix.configuration }} -Target ${{ matrix.target }} -Output package
 
       - name: Upload package
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: DecUbiSnd-win32
-          path: publish/DecUbiSnd/
+          name: DecUbiSnd-${{ matrix.target }}-win32-${{ matrix.configuration }}
+          path: package/
           if-no-files-found: error
           retention-days: 14
