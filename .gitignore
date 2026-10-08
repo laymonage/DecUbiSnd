@@ -10,6 +10,7 @@
 # Build outputs
 [Dd]ebug/
 [Rr]elease/
+package/
 x64/
 x86/
 [Aa][Rr][Mm]/

@@ -1,0 +1,17 @@
+<Project DefaultTargets="Package" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <Platform Condition="'$(Platform)' == ''">Win32</Platform>
+    <PackageOutput Condition="'$(PackageOutput)' == ''">$(MSBuildThisFileDirectory)package</PackageOutput>
+  </PropertyGroup>
+
+  <Target Name="BuildAll">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)DecUbiSnd.vcxproj;$(MSBuildThisFileDirectory)DecUbiSndGui.vcxproj"
+             Properties="Configuration=$(Configuration);Platform=$(Platform)"
+             BuildInParallel="true" />
+  </Target>
+
+  <Target Name="Package" DependsOnTargets="BuildAll">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory).github\scripts\package.ps1&quot; -Configuration $(Configuration) -Target all -Output &quot;$(PackageOutput)&quot;" />
+  </Target>
+</Project>
