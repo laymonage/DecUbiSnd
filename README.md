@@ -15,6 +15,22 @@ The projects use [vcpkg's MSBuild integration](https://learn.microsoft.com/en-us
 
 The executables require the [latest supported Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) to run.
 
+## Replacing audio segments
+
+Audio replacement is an **experimental** feature and currently supports only mono 4-bit ADPCM segments in Splinter Cell 1 PC `.LS0` banks. Support for other Ubisoft games and audio formats may be added in the future.
+
+For the current Splinter Cell 1 implementation, the replacement WAV must be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. The output can be the source bank itself to overwrite it; make a backup first. The bank is written through a temporary file and replaced only after encoding succeeds.
+
+CLI example:
+
+```powershell
+DecUbiSnd.exe .\0_0_2.LS0 --replace --replacement-wav .\replacement.wav --offset 564212 --output .\0_0_2_replaced.LS0
+```
+
+Use offset `0` for the first segment.
+
+In the GUI, scan or open an `.LS0` bank, select one mono 4-bit segment, and choose **Replace Segment...**. The selected bank and byte offset are used automatically; choose a replacement WAV and output bank. Select the loaded bank as the output to overwrite it; make a backup first. The current encoder does not resample or trim audio. A successful write confirms format and size checks, not in-game playback, so verify the output with DecUbiSnd's decoder and listen before use.
+
 ## Historical context
 
 The project was originally published on the [XeNTaX forums](https://web.archive.org/web/20231015024409/https://forum.xentax.com/viewtopic.php?f=17&t=3156). However, the forum and the files stored in the bitbucket repository were lost to time. I managed to contact [@Zenchreal](https://github.com/Zenchreal), the original author, asking for permission to mirror the project here. Here's a portion of the email.

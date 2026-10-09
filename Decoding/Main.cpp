@@ -8,13 +8,15 @@
 #include "SegmentParser.h"
 #include "WaveWriter.h"
 #include "Version.h"
+#include "Encoding/Sc1AdpcmEncoder.h"
 
 // The action to be taken
 enum EAction
 {
 	EACT_DECODE,
 	EACT_SCAN,
-	EACT_LAYEREXTRACT
+	EACT_LAYEREXTRACT,
+	EACT_REPLACE
 };
 
 // The arguments sent to the application
@@ -31,6 +33,7 @@ struct SArguments
 		InputChannels(0),
 		InputTypeForce(EUF_NULL),
 		OutputFilename(""),
+		ReplacementWavFilename(""),
 		OuputWaveFile(true),
 		OutputSampleRate(0),
 		SegmentFilename(""),
@@ -52,6 +55,7 @@ struct SArguments
 	EUbiFormat InputTypeForce;
 	std::vector<unsigned long> InputLayers;
 	std::string OutputFilename;
+	std::string ReplacementWavFilename;
 	bool OuputWaveFile;
 	unsigned long OutputSampleRate;
 	std::string SegmentFilename;
@@ -85,6 +89,18 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 		else if(Arg=="-L" || Arg=="--layer-extract")
 		{
 			Args.Action=EACT_LAYEREXTRACT;
+		}
+		else if(Arg=="--replace")
+		{
+			Args.Action=EACT_REPLACE;
+		}
+		else if(Arg=="--replacement-wav")
+		{
+			if(i>=Argc)
+			{
+				return false;
+			}
+			Args.ReplacementWavFilename=std::string(Argv[i++]);
 		}
 		else if(Arg=="-o" || Arg=="--output")
 		{
@@ -1231,6 +1247,12 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  -l, --layer Number    Specify the layer number" << std::endl;
 		std::cout << "  --input-type Type     Force it to use the decoder for Type (see below)" << std::endl;
 		std::cout << std::endl;
+		std::cout << "Splinter Cell 1 Segment Replacement: (--replace)" << std::endl;
+		std::cout << "  InputFilename         Original .LS0 bank file" << std::endl;
+		std::cout << "  --replacement-wav File Mono 16-bit PCM WAV at 36000 Hz" << std::endl;
+		std::cout << "  -i, --offset Number   Byte offset of the segment in the bank" << std::endl;
+		std::cout << "  -o, --output File     Write the replacement bank to this file" << std::endl;
+		std::cout << std::endl;
 		std::cout << "Raw UbiSoft ADPCM Decode: (--input-type ubi_raw)" << std::endl;
 		std::cout << "  --comp-left Smp Idx   Specify left decompression parameters" << std::endl;
 		std::cout << "  --comp-right Smp Idx  Specify right decompression parameters" << std::endl;
@@ -1268,6 +1290,38 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		break;
 		case EACT_LAYEREXTRACT:
 			ReturnValue=LayerExtract(Args);
+		break;
+		case EACT_REPLACE:
+			if(Args.InputFilename.empty() || Args.ReplacementWavFilename.empty()
+				|| Args.OutputFilename.empty())
+			{
+				std::cerr << "Replacement requires a source bank, --replacement-wav, and --output." << std::endl;
+				ReturnValue=1;
+			}
+			else if(Args.InputOffset < 0)
+			{
+				std::cerr << "Replacement offset must be zero or greater." << std::endl;
+				ReturnValue=1;
+			}
+			else
+			{
+				try
+				{
+					const SSc1SegmentInfo Result = ReplaceSc1AdpcmSegment(
+						Args.InputFilename, Args.ReplacementWavFilename, Args.OutputFilename,
+						static_cast<unsigned long long>(Args.InputOffset));
+					std::cout << "Wrote " << Args.OutputFilename << " (replaced "
+						<< Result.SegmentSize << " bytes at bank offset "
+						<< Args.InputOffset << ", " << Result.SampleCount << " samples at "
+						<< Result.SampleRate << " Hz)." << std::endl;
+					ReturnValue=0;
+				}
+				catch(const std::exception& Error)
+				{
+					std::cerr << "Replacement failed: " << Error.what() << std::endl;
+					ReturnValue=1;
+				}
+			}
 		break;
 	}
 	return ReturnValue;

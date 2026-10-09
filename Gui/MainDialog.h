@@ -30,6 +30,7 @@ namespace NDecGui
 			ID_ScanDirectoryButton=1000,
 			ID_ScanFileButton,
 			ID_AddManuallyButton,
+			ID_ReplaceSegmentButton,
 			ID_LoadBankButton,
 			ID_ClearButton,
 			ID_SelectAllButton,
@@ -72,6 +73,7 @@ namespace NDecGui
 		wxButton* m_ScanDirectoryButton;
 		wxButton* m_ScanFileButton;
 		wxButton* m_AddManuallyButton;
+		wxButton* m_ReplaceSegmentButton;
 		wxButton* m_LoadBankMapButton;
 		wxButton* m_ClearButton;
 		wxButton* m_SelectAllButton;
@@ -113,6 +115,7 @@ namespace NDecGui
 		void OnScanDirectoryButtonClicked(wxCommandEvent& Event);
 		void OnScanFileButtonClicked(wxCommandEvent& Event);
 		void OnAddManuallyButtonClicked(wxCommandEvent& Event);
+		void OnReplaceSegmentButtonClicked(wxCommandEvent& Event);
 		void OnLoadBankMapButtonClicked(wxCommandEvent& Event);
 		void OnClearButtonClicked(wxCommandEvent& Event);
 		void OnNextButtonClicked(wxCommandEvent& Event);

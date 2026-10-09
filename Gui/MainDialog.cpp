@@ -18,6 +18,7 @@
 #include "Functionality/Segment.h"
 #include "Functionality/SegmentStream.h"
 #include "Functionality/Output.h"
+#include "Encoding/Sc1AdpcmEncoder.h"
 #include "Version.h"
 
 // CMainDialog Event Table
@@ -30,6 +31,7 @@ BEGIN_EVENT_TABLE(NDecGui::CMainDialog, wxDialog)
 	EVT_BUTTON(ID_ScanDirectoryButton, NDecGui::CMainDialog::OnScanDirectoryButtonClicked)
 	EVT_BUTTON(ID_ScanFileButton, NDecGui::CMainDialog::OnScanFileButtonClicked)
 	EVT_BUTTON(ID_AddManuallyButton, NDecGui::CMainDialog::OnAddManuallyButtonClicked)
+	EVT_BUTTON(ID_ReplaceSegmentButton, NDecGui::CMainDialog::OnReplaceSegmentButtonClicked)
 	EVT_BUTTON(ID_ClearButton, NDecGui::CMainDialog::OnClearButtonClicked)
 	EVT_BUTTON(ID_NextButton, NDecGui::CMainDialog::OnNextButtonClicked)
 	EVT_BUTTON(ID_SelectAllButton, NDecGui::CMainDialog::OnSelectAllButtonClicked)
@@ -76,6 +78,7 @@ NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wx
 	m_ScanDirectoryButton = new wxButton(this, ID_ScanDirectoryButton, wxT("Scan &Directory..."));
 	m_ScanFileButton = new wxButton(this, ID_ScanFileButton, wxT("Scan &File..."));
 	m_AddManuallyButton = new wxButton(this, ID_AddManuallyButton, wxT("Add &Manually..."));
+	m_ReplaceSegmentButton = new wxButton(this, ID_ReplaceSegmentButton, wxT("Replace &Segment..."));
 	m_LoadBankMapButton = new wxButton(this, ID_LoadBankButton, wxT("L&oad Bank/Map..."));
 	m_ClearButton = new wxButton(this, ID_ClearButton, wxT("&Clear"));
 	m_SelectAllButton = new wxButton(this, ID_SelectAllButton, wxT("Select &All"));
@@ -135,6 +138,7 @@ NDecGui::CMainDialog::CMainDialog(wxWindow* Parent, const wxPoint& Pos, const wx
 	EditSizer->Add(m_DuplicateButton, 0, wxBOTTOM|wxEXPAND, 5);
 	EditSizer->Add(m_RemoveButton, 0, wxBOTTOM|wxEXPAND, 5);
 	EditSizer->Add(m_SetInfoButton, 0, wxEXPAND, 5);
+	EditSizer->Add(m_ReplaceSegmentButton, 0, wxTOP|wxEXPAND, 5);
 	ButtonsSizer->Add(EditSizer, 0, wxRIGHT, 5);
 	LayersSizer->Add(m_MixLayersButton, 0, wxBOTTOM|wxEXPAND, 5);
 	LayersSizer->Add(m_UnmixLayersButton, 0, wxEXPAND, 5);
@@ -277,6 +281,25 @@ void NDecGui::CMainDialog::RefreshGui()
 	if(m_SetInfoButton->IsEnabled()!=EnableState)
 	{
 		m_SetInfoButton->Enable(EnableState);
+	}
+	EnableState=false;
+	if(m_SegmentList->GetSegmentsList() && m_SegmentList->GetSelectedItemCount()==1)
+	{
+		TListSelection Selection;
+		m_SegmentList->GetSelection(Selection);
+		if(Selection.size()==1)
+		{
+			NDecFunc::CSegment* Segment = m_SegmentList->GetSegmentsList()->Get(Selection[0]);
+			if(Segment && Segment->GetType()==EUF_UBI_6OR4 && Segment->GetChannels()==1)
+			{
+				wxFileName BankFilename(Segment->GetFilename());
+				EnableState=BankFilename.GetExt().CmpNoCase(wxT("LS0"))==0;
+			}
+		}
+	}
+	if(m_ReplaceSegmentButton->IsEnabled()!=EnableState)
+	{
+		m_ReplaceSegmentButton->Enable(EnableState);
 	}
 
 	// Mix button
@@ -513,6 +536,7 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 			wxMessageBox(_("The offset entered exceeds the length of the file."), _("Error"), wxICON_EXCLAMATION);
 			return;
 		}
+
 		if(Size==0)
 		{
 			Size=FileSize-Offset;
@@ -597,6 +621,91 @@ void NDecGui::CMainDialog::OnAddManuallyButtonClicked(wxCommandEvent& Event)
 		m_FileList->RefreshData();
 		m_SegmentList->RefreshData();
 		RefreshGui();
+	}
+	return;
+}
+
+void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
+{
+	if(!m_SegmentList->GetSegmentsList() || m_SegmentList->GetSelectedItemCount()!=1)
+	{
+		return;
+	}
+
+	TListSelection Selection;
+	m_SegmentList->GetSelection(Selection);
+	if(Selection.size()!=1)
+	{
+		return;
+	}
+
+	NDecFunc::CSegment* Segment=m_SegmentList->GetSegmentsList()->Get(Selection[0]);
+	if(!Segment || Segment->GetType()!=EUF_UBI_6OR4 || Segment->GetChannels()!=1)
+	{
+		return;
+	}
+	const std::string BankPath=Segment->GetFilename();
+	const unsigned long long Offset=static_cast<unsigned long long>(Segment->GetOffset());
+
+	SSc1SegmentInfo Info;
+	try
+	{
+		Info=InspectSc1AdpcmSegment(BankPath, Offset);
+		if(Info.SegmentSize!=static_cast<unsigned long long>(Segment->GetSize()))
+		{
+			throw std::runtime_error("selected segment size does not match the mono 4-bit bank segment");
+		}
+	}
+	catch(const std::exception& Error)
+	{
+		wxMessageBox(wxString::FromUTF8(Error.what()), _("Invalid target segment"),
+			wxOK | wxICON_ERROR, this);
+		return;
+	}
+	if(wxMessageBox(wxString::Format(
+		_("Replace the selected segment at byte offset %llu (%llu bytes, %lu samples at %lu Hz)?\nThe replacement WAV must be mono signed 16-bit PCM at exactly this rate and sample count."),
+		Offset, Info.SegmentSize, Info.SampleCount, Info.SampleRate),
+		_("Confirm replacement format"), wxOK | wxCANCEL | wxICON_INFORMATION, this)!=wxOK)
+	{
+		return;
+	}
+
+	wxFileDialog WaveDialog(this, _("Select replacement audio"),
+		m_InputDir, wxEmptyString,
+		_("Microsoft Wave Files (*.wav)|*.wav|All Files (*.*)|*.*"),
+		wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if(WaveDialog.ShowModal()!=wxID_OK)
+	{
+		return;
+	}
+
+	wxFileName DefaultOutput(BankPath);
+	DefaultOutput.SetName(DefaultOutput.GetName()+wxT("_replaced"));
+	wxFileDialog OutputDialog(this, _("Save replacement bank"),
+		DefaultOutput.GetPath(), DefaultOutput.GetFullName(),
+		_("Splinter Cell sound banks (*.LS0)|*.LS0|All Files (*.*)|*.*"),
+		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if(OutputDialog.ShowModal()!=wxID_OK)
+	{
+		return;
+	}
+
+	try
+	{
+		const SSc1SegmentInfo Result = ReplaceSc1AdpcmSegment(
+			BankPath,
+			std::string(WaveDialog.GetPath().mb_str()),
+			std::string(OutputDialog.GetPath().mb_str()),
+			Offset);
+		wxMessageBox(wxString::Format(
+			_("Wrote replacement bank.\nReplaced %llu bytes at offset %llu (%lu samples at %lu Hz)."),
+			Result.SegmentSize, Offset, Result.SampleCount, Result.SampleRate),
+			_("Replacement complete"), wxOK | wxICON_INFORMATION, this);
+	}
+	catch(const std::exception& Error)
+	{
+		wxMessageBox(wxString::FromUTF8(Error.what()), _("Replacement failed"),
+			wxOK | wxICON_ERROR, this);
 	}
 	return;
 }
@@ -1136,4 +1245,3 @@ void NDecGui::CMainDialog::ThawUpdate()
 	}
 	return;
 }
-

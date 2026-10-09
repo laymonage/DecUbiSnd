@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Encoding\Sc1AdpcmEncoder.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Decoding\6BitAdpcm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -92,6 +95,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Encoding\Sc1AdpcmEncoder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Decoding\6BitAdpcm.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -84,6 +84,7 @@
     <ClCompile Include="Functionality\SegmentStream.cpp"><ObjectFileName>$(IntDir)Functionality\</ObjectFileName></ClCompile>
     <ClCompile Include="Sound\AudioPlayer.cpp"><ObjectFileName>$(IntDir)Sound\</ObjectFileName></ClCompile>
     <ClCompile Include="Sound\PortAudioWrapper.cpp"><ObjectFileName>$(IntDir)Sound\</ObjectFileName></ClCompile>
+    <ClCompile Include="Encoding\Sc1AdpcmEncoder.cpp"><ObjectFileName>$(IntDir)Encoding\</ObjectFileName></ClCompile>
     <ClCompile Include="Decoding\6BitAdpcm.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
     <ClCompile Include="Decoding\Adpcm.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
     <ClCompile Include="Decoding\AudioExceptions.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>

@@ -91,6 +91,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Encoding\Sc1AdpcmEncoder.cpp" />
     <ClCompile Include="Decoding\6BitAdpcm.cpp" />
     <ClCompile Include="Decoding\ADPCM.cpp" />
     <ClCompile Include="Decoding\AudioExceptions.cpp" />
@@ -121,6 +122,7 @@
     <ClCompile Include="Decoding\WaveWriter.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Encoding\Sc1AdpcmEncoder.h" />
     <ClInclude Include="Decoding\6BitAdpcm.h" />
     <ClInclude Include="Decoding\ADPCM.h" />
     <ClInclude Include="Decoding\AudioExceptions.h" />
