@@ -37,7 +37,6 @@ runs:
       shell: pwsh
       run: |
         winget install --id UPX.UPX -e --accept-source-agreements --accept-package-agreements --silent
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         "$env:LOCALAPPDATA\Microsoft\WinGet\Links" | Out-File -FilePath $env:GITHUB_PATH -Append
 
     - name: Install x86 dependencies
@@ -49,4 +48,3 @@ runs:
         $features = @()
         if ('${{ inputs.gui }}' -eq 'true') { $features += '--x-feature=gui' }
         .\vcpkg\vcpkg.exe install --triplet x86-windows-static-md --x-install-root=vcpkg_static @features
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
