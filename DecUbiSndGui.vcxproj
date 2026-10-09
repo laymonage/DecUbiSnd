@@ -23,8 +23,8 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(MSBuildThisFileDirectory)Vcpkg.MSBuild.props" />
   <PropertyGroup>
-    <VcpkgInstalledDir>$(MSBuildThisFileDirectory)vcpkg_static\x86-windows-static-md\</VcpkgInstalledDir>
     <TargetName>DecUbiSndGui</TargetName>
     <OutDir>Gui\$(Configuration)\</OutDir>
     <IntDir>Gui\$(Configuration)\obj\</IntDir>
@@ -41,16 +41,12 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>Pch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>__WXMSW__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ResourceCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>winmm.lib;comctl32.lib;rpcrt4.lib;ogg.lib;vorbis.lib;vorbisfile.lib;portaudio.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>winmm.lib;comctl32.lib;rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
@@ -58,28 +54,16 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;__WXDEBUG__;wxDEBUG_LEVEL=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)debug\lib\mswud;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
-    <ResourceCompile>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)debug\lib\mswud;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ResourceCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(VcpkgInstalledDir)debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33ud.lib;wxmsw33ud_core.lib;libpng16d.lib;zlibd.lib;nanosvg.lib;nanosvgrast.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)lib\mswu;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
-    <ResourceCompile>
-      <AdditionalIncludeDirectories>$(VcpkgInstalledDir)lib\mswu;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ResourceCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(VcpkgInstalledDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33u.lib;wxmsw33u_core.lib;libpng16.lib;zlib.lib;nanosvg.lib;nanosvgrast.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
@@ -123,9 +107,6 @@
     <ClCompile Include="Decoding\StreamHelper.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
     <ClCompile Include="Decoding\Version5Stream.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
     <ClCompile Include="Decoding\WaveWriter.cpp"><PrecompiledHeader>NotUsing</PrecompiledHeader><ObjectFileName>$(IntDir)Decoding\</ObjectFileName></ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="Windows.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <!-- Restore explicitly so the optional GUI feature stays consistent in the shared install tree. -->
+    <VcpkgManifestInstall>false</VcpkgManifestInstall>
+    <VcpkgManifestRoot>$(MSBuildThisFileDirectory)</VcpkgManifestRoot>
+    <VcpkgInstalledDir>$(MSBuildThisFileDirectory)vcpkg_static\</VcpkgInstalledDir>
+    <VcpkgConfiguration>$(Configuration)</VcpkgConfiguration>
+    <VcpkgTriplet>x86-windows-static-md</VcpkgTriplet>
+  </PropertyGroup>
+</Project>

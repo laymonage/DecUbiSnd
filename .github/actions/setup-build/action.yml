@@ -29,6 +29,10 @@ runs:
       shell: pwsh
       run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
 
+    - name: Enable vcpkg MSBuild integration
+      shell: pwsh
+      run: .\vcpkg\vcpkg.exe integrate install
+
     - name: Install UPX
       shell: pwsh
       run: |

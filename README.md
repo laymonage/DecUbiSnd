@@ -4,12 +4,14 @@ DecUbiSnd decodes audio streams found in many Ubisoft games. Run `DecUbiSnd` wit
 
 ## Building
 
-On Windows, install Visual Studio with the C++ workload and make `vcpkg` available. From the repository root, run:
+On Windows, install Visual Studio with the C++ workload and make `vcpkg` available. From the repository root, install the dependencies and build:
 
 ```powershell
 vcpkg install --triplet x86-windows-static-md --x-install-root=vcpkg_static --x-feature=gui
 msbuild Package.proj /t:BuildAll /p:Configuration=Release /p:Platform=Win32
 ```
+
+The projects use [vcpkg's MSBuild integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/msbuild-integration) for include paths and library linking; the explicit install step selects the optional GUI feature in the shared install tree.
 
 The executables require the [latest supported Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) to run.
 
