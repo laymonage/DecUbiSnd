@@ -2,6 +2,17 @@
 
 DecUbiSnd decodes audio streams found in many Ubisoft games. Run `DecUbiSnd` without any arguments to see the available command-line switches. The `Examples` directory contains batch files demonstrating usage.
 
+## Building
+
+On Windows, install Visual Studio with the C++ workload and make `vcpkg` available. From the repository root, run:
+
+```powershell
+vcpkg install --triplet x86-windows-static-md --x-install-root=vcpkg_static --x-feature=gui
+msbuild Package.proj /t:BuildAll /p:Configuration=Release /p:Platform=Win32
+```
+
+The executables require the [latest supported Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) to run.
+
 ## Historical context
 
 The project was originally published on the [XeNTaX forums](https://web.archive.org/web/20231015024409/https://forum.xentax.com/viewtopic.php?f=17&t=3156). However, the forum and the files stored in the bitbucket repository were lost to time. I managed to contact [@Zenchreal](https://github.com/Zenchreal), the original author, asking for permission to mirror the project here. Here's a portion of the email.
