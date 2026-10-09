@@ -22,6 +22,14 @@ foreach ($exe in $exes) {
 }
 
 if ($Configuration -eq 'Release') {
+    if (-not (Get-Command upx -ErrorAction SilentlyContinue)) { throw 'upx is required for Release packaging. Install it with: winget install UPX.UPX' }
+    foreach ($exe in $exes) {
+        & upx --best --quiet (Join-Path $Output (Split-Path $exe -Leaf))
+        if ($LASTEXITCODE -ne 0) { throw "upx failed on $exe" }
+    }
+}
+
+if ($Configuration -eq 'Release') {
     Copy-Item (Join-Path $root 'README.md'), (Join-Path $root 'LICENSE') $Output
     $ports = @('libogg', 'libvorbis')
     if ($Target -in 'gui', 'all') { $ports += 'wxwidgets' }

@@ -1,5 +1,5 @@
 name: Set up build environment
-description: Installs MSBuild and the vcpkg dependencies (x86) for DecUbiSnd
+description: Installs MSBuild, UPX, and the vcpkg dependencies (x86) for DecUbiSnd
 
 inputs:
   gui:
@@ -28,6 +28,13 @@ runs:
     - name: Bootstrap vcpkg
       shell: pwsh
       run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+    - name: Install UPX
+      shell: pwsh
+      run: |
+        winget install --id UPX.UPX -e --accept-source-agreements --accept-package-agreements --silent
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Links" | Out-File -FilePath $env:GITHUB_PATH -Append
 
     - name: Install x86 dependencies
       shell: pwsh
