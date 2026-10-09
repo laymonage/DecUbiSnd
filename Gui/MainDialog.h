@@ -7,7 +7,6 @@
 #include <wx/listctrl.h>
 #include "../Sound/AudioPlayer.h"
 
-class wxSoundStreamWin;
 namespace NDecFunc
 {
 	class CFilesList;
