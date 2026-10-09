@@ -50,6 +50,7 @@ packages/
 
 # vcpkg artifacts (manifest mode)
 vcpkg_installed/
+vcpkg_static/
 
 # OS files
 .DS_Store

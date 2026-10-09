@@ -6,8 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-$vcpkg = Join-Path $root 'vcpkg_installed\x86-windows'
-$bin = if ($Configuration -eq 'Debug') { Join-Path $vcpkg 'debug\bin' } else { Join-Path $vcpkg 'bin' }
+$vcpkg = Join-Path $root 'vcpkg_static\x86-windows-static-md'
 
 $exes = @()
 if ($Target -in 'cli', 'all') { $exes += Join-Path $root "Decoding\$Configuration\DecUbiSnd.exe" }
@@ -21,24 +20,6 @@ foreach ($exe in $exes) {
     $pdb = [IO.Path]::ChangeExtension($exe, '.pdb')
     if ($Configuration -eq 'Debug' -and (Test-Path $pdb)) { Copy-Item $pdb $Output }
 }
-
-# Find the vcpkg DLLs the executables need, following DLL-to-DLL imports.
-# Import names are stored as plain ASCII in the PE file, so searching the bytes is enough.
-$available = Get-ChildItem $bin -Filter *.dll
-$needed = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-$queue = [System.Collections.Generic.Queue[string]]::new()
-$exes | ForEach-Object { $queue.Enqueue($_) }
-while ($queue.Count -gt 0) {
-    $file = $queue.Dequeue()
-    $text = [Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes($file))
-    foreach ($dll in $available) {
-        if ($text.IndexOf($dll.Name, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $needed.Add($dll.Name)) {
-            $queue.Enqueue($dll.FullName)
-        }
-    }
-}
-foreach ($name in $needed) { Copy-Item (Join-Path $bin $name) $Output }
-Write-Host "Bundled DLLs: $($needed -join ', ')"
 
 if ($Configuration -eq 'Release') {
     Copy-Item (Join-Path $root 'README.md'), (Join-Path $root 'LICENSE') $Output

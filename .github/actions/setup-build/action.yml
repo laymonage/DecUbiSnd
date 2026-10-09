@@ -37,5 +37,5 @@ runs:
         New-Item $env:VCPKG_DEFAULT_BINARY_CACHE -ItemType Directory -Force | Out-Null
         $features = @()
         if ('${{ inputs.gui }}' -eq 'true') { $features += '--x-feature=gui' }
-        .\vcpkg\vcpkg.exe install --triplet x86-windows @features
+        .\vcpkg\vcpkg.exe install --triplet x86-windows-static-md --x-install-root=vcpkg_static @features
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
