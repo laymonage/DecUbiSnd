@@ -1,1 +1,1 @@
-#define DECUBISND_VERSION "0.81"
+#define DECUBISND_VERSION "0.82"
