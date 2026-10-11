@@ -91,6 +91,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Encoding\AudioConverter.cpp" />
     <ClCompile Include="Encoding\Sc1AdpcmEncoder.cpp" />
     <ClCompile Include="Decoding\6BitAdpcm.cpp" />
     <ClCompile Include="Decoding\ADPCM.cpp" />
