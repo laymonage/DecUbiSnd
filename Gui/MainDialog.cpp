@@ -4,8 +4,11 @@
 
 #include "Pch.h"
 
+#include <wx/choicdlg.h>
+#include <wx/filefn.h>
 #include <wx/filename.h>
 #include <algorithm>
+#include <cmath>
 
 #include "Gui/App.h"
 #include "Gui/MainDialog.h"
@@ -19,6 +22,7 @@
 #include "Functionality/SegmentStream.h"
 #include "Functionality/Output.h"
 #include "Encoding/Sc1AdpcmEncoder.h"
+#include "Encoding/AudioConverter.h"
 #include "Version.h"
 
 // CMainDialog Event Table
@@ -663,20 +667,86 @@ void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
 		return;
 	}
 	if(wxMessageBox(wxString::Format(
-		_("Replace the selected segment at byte offset %llu (%llu bytes, %lu samples at %lu Hz)?\nThe replacement WAV must be mono signed 16-bit PCM at exactly this rate and sample count."),
+		_("Replace the selected segment at byte offset %llu (%llu bytes, %lu samples at %lu Hz)?\nYou can choose an exact-format WAV or convert another audio file to fit this segment."),
 		Offset, Info.SegmentSize, Info.SampleCount, Info.SampleRate),
-		_("Confirm replacement format"), wxOK | wxCANCEL | wxICON_INFORMATION, this)!=wxOK)
+		_("Confirm segment replacement"), wxOK | wxCANCEL | wxICON_INFORMATION, this)!=wxOK)
 	{
 		return;
 	}
 
-	wxFileDialog WaveDialog(this, _("Select replacement audio"),
+	wxFileDialog WaveDialog(this, _("Select replacement audio file"),
 		m_InputDir, wxEmptyString,
-		_("Microsoft Wave Files (*.wav)|*.wav|All Files (*.*)|*.*"),
+		_("Audio Files (*.wav;*.mp3;*.ogg;*.flac;*.m4a;*.aac;*.wma)|*.wav;*.mp3;*.ogg;*.flac;*.m4a;*.aac;*.wma|All Files (*.*)|*.*"),
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST);
 	if(WaveDialog.ShowModal()!=wxID_OK)
 	{
 		return;
+	}
+
+	std::string ReplacementPath(WaveDialog.GetPath().mb_str());
+	const bool NeedsConversion=!IsSc1ReplacementWaveCompatible(
+		ReplacementPath, Info.SampleRate, Info.SampleCount);
+	EAudioFitMode FitMode=EAFM_TRIM_PAD;
+	double StartSeconds=0;
+	std::wstring FfmpegPath;
+	std::wstring FfprobePath;
+	if(NeedsConversion)
+	{
+		const wxString FitChoices[] =
+		{
+			_("Trim longer audio or pad shorter audio with silence (keep speed/pitch)"),
+			_("Time-stretch the full audio to fit (preserve pitch)")
+		};
+		wxSingleChoiceDialog FitDialog(this,
+			_("Choose how to fit the selected audio to the segment duration."),
+			_("Fit replacement audio"), 2, FitChoices);
+		if(FitDialog.ShowModal()!=wxID_OK)
+		{
+			return;
+		}
+		FitMode=FitDialog.GetSelection()==1 ? EAFM_TIME_STRETCH : EAFM_TRIM_PAD;
+
+		wxString MissingTools;
+		FfmpegPath=FindAudioToolOnPath(L"ffmpeg.exe");
+		if(FfmpegPath.empty())
+		{
+			MissingTools=wxT("ffmpeg.exe");
+		}
+		if(FitMode==EAFM_TIME_STRETCH)
+		{
+			FfprobePath=FindAudioToolOnPath(L"ffprobe.exe");
+			if(FfprobePath.empty())
+			{
+				if(!MissingTools.empty())
+				{
+					MissingTools.append(wxT(", "));
+				}
+				MissingTools.append(wxT("ffprobe.exe"));
+			}
+		}
+		if(!MissingTools.empty())
+		{
+			wxMessageBox(wxString::Format(
+				_("Audio conversion requires these tools on PATH: %s. Install FFmpeg with \"winget install ffmpeg\" in PowerShell, then restart DecUbiSnd."),
+				MissingTools),
+				_("FFmpeg required"), wxOK | wxICON_INFORMATION, this);
+			return;
+		}
+
+		wxTextEntryDialog StartDialog(this,
+			_("Start reading the source audio at this time (seconds)."),
+			_("Source start time"), wxT("0"));
+		if(StartDialog.ShowModal()!=wxID_OK)
+		{
+			return;
+		}
+		if(!StartDialog.GetValue().ToDouble(&StartSeconds)
+			|| !std::isfinite(StartSeconds) || StartSeconds<0)
+		{
+			wxMessageBox(_("Enter a valid non-negative start time in seconds."),
+				_("Invalid start time"), wxOK | wxICON_ERROR, this);
+				return;
+		}
 	}
 
 	wxFileName DefaultOutput(BankPath);
@@ -690,13 +760,33 @@ void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
 		return;
 	}
 
+	wxString TemporaryWave;
 	try
 	{
+		if(NeedsConversion)
+		{
+			TemporaryWave=wxFileName::CreateTempFileName(wxT("DecUbiSnd-replacement-"));
+			if(TemporaryWave.empty())
+			{
+				throw std::runtime_error("unable to create a temporary WAV file");
+			}
+			ConvertAudioToSc1ReplacementWave(
+				FfmpegPath,
+				FfprobePath,
+				std::wstring(WaveDialog.GetPath().c_str()),
+				std::wstring(TemporaryWave.c_str()),
+				Info.SampleRate, Info.SampleCount, StartSeconds, FitMode);
+			ReplacementPath=std::string(TemporaryWave.mb_str());
+		}
 		const SSc1SegmentInfo Result = ReplaceSc1AdpcmSegment(
 			BankPath,
-			std::string(WaveDialog.GetPath().mb_str()),
+			ReplacementPath,
 			std::string(OutputDialog.GetPath().mb_str()),
 			Offset);
+		if(!TemporaryWave.empty())
+		{
+			wxRemoveFile(TemporaryWave);
+		}
 		wxMessageBox(wxString::Format(
 			_("Wrote replacement bank.\nReplaced %llu bytes at offset %llu (%lu samples at %lu Hz)."),
 			Result.SegmentSize, Offset, Result.SampleCount, Result.SampleRate),
@@ -704,6 +794,10 @@ void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
 	}
 	catch(const std::exception& Error)
 	{
+		if(!TemporaryWave.empty() && wxFileExists(TemporaryWave))
+		{
+			wxRemoveFile(TemporaryWave);
+		}
 		wxMessageBox(wxString::FromUTF8(Error.what()), _("Replacement failed"),
 			wxOK | wxICON_ERROR, this);
 	}

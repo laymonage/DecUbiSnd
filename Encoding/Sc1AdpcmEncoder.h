@@ -9,6 +9,11 @@ struct SSc1SegmentInfo
 	unsigned long long SegmentSize;
 };
 
+bool IsSc1ReplacementWaveCompatible(
+	const std::string& WaveFilename,
+	unsigned long SampleRate,
+	unsigned long SampleCount);
+
 SSc1SegmentInfo InspectSc1AdpcmSegment(
 	const std::string& BankFilename,
 	unsigned long long Offset);
