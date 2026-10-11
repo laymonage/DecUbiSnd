@@ -95,6 +95,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Encoding\AudioConverter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Encoding\Sc1AdpcmEncoder.h">
       <Filter>Header Files</Filter>
     </ClInclude>

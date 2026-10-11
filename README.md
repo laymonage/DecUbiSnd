@@ -19,7 +19,9 @@ The executables require the [latest supported Microsoft Visual C++ Redistributab
 
 Audio replacement is an **experimental** feature and currently supports only mono 4-bit ADPCM segments in Splinter Cell 1 PC `.LS0` banks. Support for other Ubisoft games and audio formats may be added in the future.
 
-For the current Splinter Cell 1 implementation, the replacement WAV must be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. The output can be the source bank itself to overwrite it; make a backup first. The bank is written through a temporary file and replaced only after encoding succeeds.
+For the current Splinter Cell 1 implementation, replacement audio must ultimately be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. The CLI expects a WAV already in this format. An already compatible WAV can be used directly in the GUI as well. The GUI can also convert other audio files with an external FFmpeg installation: choose to trim longer audio or pad shorter audio with silence, or time-stretch the full audio while preserving pitch. Both modes let you choose a source start time. FFmpeg is not bundled; install it separately via `winget install ffmpeg`. Time-stretching also requires `ffprobe.exe`, normally distributed beside FFmpeg. This keeps DecUbiSnd's executable size unchanged.
+
+The output can be the source bank itself to overwrite it; make a backup first. The bank is written through a temporary file and replaced only after encoding succeeds. The replacement audio file cannot also be the output file.
 
 CLI example:
 
@@ -29,7 +31,7 @@ DecUbiSnd.exe .\0_0_2.LS0 --replace --replacement-wav .\replacement.wav --offset
 
 Use offset `0` for the first segment.
 
-In the GUI, scan or open an `.LS0` bank, select one mono 4-bit segment, and choose **Replace Segment...**. The selected bank and byte offset are used automatically; choose a replacement WAV and output bank. Select the loaded bank as the output to overwrite it; make a backup first. The current encoder does not resample or trim audio. A successful write confirms format and size checks, not in-game playback, so verify the output with DecUbiSnd's decoder and listen before use.
+In the GUI, scan or open an `.LS0` bank, select one mono 4-bit segment, and choose **Replace Segment...**. The selected bank and byte offset are used automatically; choose a WAV or another audio file, a fit mode if conversion is needed, and an output bank. Select the loaded bank as the output to overwrite it; make a backup first. A successful write confirms format and size checks, not in-game playback, so verify the output with DecUbiSnd's decoder and listen before use.
 
 ## Historical context
 

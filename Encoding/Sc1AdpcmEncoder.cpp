@@ -757,6 +757,21 @@ namespace
 	}
 }
 
+bool IsSc1ReplacementWaveCompatible(const std::string& WaveFilename,
+	unsigned long SampleRate, unsigned long SampleCount)
+{
+	std::vector<short> Samples;
+	try
+	{
+		ReadWave(WaveFilename, SampleRate, SampleCount, Samples);
+		return true;
+	}
+	catch(const std::runtime_error&)
+	{
+		return false;
+	}
+}
+
 SSc1SegmentInfo InspectSc1AdpcmSegment(const std::string& BankFilename, unsigned long long Offset)
 {
 	if(BankFilename.empty())
