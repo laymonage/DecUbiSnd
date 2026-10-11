@@ -17,3 +17,5 @@ void ConvertAudioToSc1ReplacementWave(
 	unsigned long SampleCount,
 	double StartSeconds,
 	EAudioFitMode FitMode);
+
+std::wstring FindAudioToolOnPath(const std::wstring& Filename);

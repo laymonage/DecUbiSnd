@@ -9,6 +9,15 @@
 #include "WaveWriter.h"
 #include "Version.h"
 #include "Encoding/Sc1AdpcmEncoder.h"
+#include "Encoding/AudioConverter.h"
+
+#define NOMINMAX
+#include <windows.h>
+#undef GetMessage
+
+#include <cmath>
+#include <memory>
+#include <stdexcept>
 
 // The action to be taken
 enum EAction
@@ -34,6 +43,8 @@ struct SArguments
 		InputTypeForce(EUF_NULL),
 		OutputFilename(""),
 		ReplacementWavFilename(""),
+		ReplacementFitMode(EAFM_TRIM_PAD),
+		ReplacementStartSeconds(0),
 		OuputWaveFile(true),
 		OutputSampleRate(0),
 		SegmentFilename(""),
@@ -56,6 +67,8 @@ struct SArguments
 	std::vector<unsigned long> InputLayers;
 	std::string OutputFilename;
 	std::string ReplacementWavFilename;
+	EAudioFitMode ReplacementFitMode;
+	double ReplacementStartSeconds;
 	bool OuputWaveFile;
 	unsigned long OutputSampleRate;
 	std::string SegmentFilename;
@@ -94,13 +107,49 @@ bool ParseArguments(SArguments& Args, unsigned long Argc, _TCHAR* Argv[])
 		{
 			Args.Action=EACT_REPLACE;
 		}
-		else if(Arg=="--replacement-wav")
+		else if(Arg=="--replacement-wav" || Arg=="--replacement-audio")
 		{
 			if(i>=Argc)
 			{
 				return false;
 			}
 			Args.ReplacementWavFilename=std::string(Argv[i++]);
+		}
+		else if(Arg=="--fit")
+		{
+			if(i>=Argc)
+			{
+				return false;
+			}
+			const std::string FitMode(Argv[i++]);
+			if(FitMode=="trim-pad")
+			{
+				Args.ReplacementFitMode=EAFM_TRIM_PAD;
+			}
+			else if(FitMode=="stretch")
+			{
+				Args.ReplacementFitMode=EAFM_TIME_STRETCH;
+			}
+			else
+			{
+				return false;
+			}
+		}
+		else if(Arg=="--start-seconds")
+		{
+			if(i>=Argc)
+			{
+				return false;
+			}
+			const char* StartTime=Argv[i++];
+			char* End=NULL;
+			Args.ReplacementStartSeconds=strtod(StartTime, &End);
+			if(End==StartTime || End==NULL || *End!='\0'
+				|| !std::isfinite(Args.ReplacementStartSeconds)
+				|| Args.ReplacementStartSeconds<0)
+			{
+				return false;
+			}
 		}
 		else if(Arg=="-o" || Arg=="--output")
 		{
@@ -1200,6 +1249,64 @@ int LayerExtract(SArguments& Args)
 	return 0;
 }
 
+namespace
+{
+	std::wstring AnsiToWidePath(const std::string& Path)
+	{
+		const int Required=MultiByteToWideChar(CP_ACP, 0, Path.c_str(), -1, NULL, 0);
+		if(!Required)
+		{
+			throw std::runtime_error("unable to convert a command-line path to Unicode");
+		}
+		std::vector<wchar_t> Buffer(Required);
+		if(!MultiByteToWideChar(CP_ACP, 0, Path.c_str(), -1, &Buffer[0], Required))
+		{
+			throw std::runtime_error("unable to convert a command-line path to Unicode");
+		}
+		return std::wstring(&Buffer[0]);
+	}
+
+	class CTemporaryWaveFile
+	{
+	protected:
+		std::string m_Filename;
+
+	public:
+		CTemporaryWaveFile()
+		{
+			char Directory[MAX_PATH];
+			const DWORD Length=GetTempPathA(MAX_PATH, Directory);
+			if(!Length || Length>=MAX_PATH)
+			{
+				throw std::runtime_error("unable to locate the temporary files directory");
+			}
+			char Filename[MAX_PATH];
+			if(!GetTempFileNameA(Directory, "dus", 0, Filename))
+			{
+				throw std::runtime_error("unable to create a temporary WAV filename");
+			}
+			m_Filename=Filename;
+		}
+
+		~CTemporaryWaveFile()
+		{
+			if(!m_Filename.empty())
+			{
+				DeleteFileA(m_Filename.c_str());
+			}
+		}
+
+		const std::string& GetFilename() const
+		{
+			return m_Filename;
+		}
+
+	private:
+		CTemporaryWaveFile(const CTemporaryWaveFile&);
+		CTemporaryWaveFile& operator=(const CTemporaryWaveFile&);
+	};
+}
+
 int _tmain(int Argc, _TCHAR* Argv[])
 {
 	// Parse the arguments
@@ -1249,7 +1356,10 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << std::endl;
 		std::cout << "Splinter Cell 1 Segment Replacement: (--replace)" << std::endl;
 		std::cout << "  InputFilename         Original .LS0 bank file" << std::endl;
-		std::cout << "  --replacement-wav File Mono 16-bit PCM WAV at 36000 Hz" << std::endl;
+		std::cout << "  --replacement-audio File   Audio file or prepared replacement WAV" << std::endl;
+		std::cout << "  --fit trim-pad|stretch     Fit audio (default: trim-pad)" << std::endl;
+		std::cout << "  --start-seconds Number     Source start time (default: 0)" << std::endl;
+		std::cout << "  Conversion requires ffmpeg.exe on PATH; stretch also needs ffprobe.exe" << std::endl;
 		std::cout << "  -i, --offset Number   Byte offset of the segment in the bank" << std::endl;
 		std::cout << "  -o, --output File     Write the replacement bank to this file" << std::endl;
 		std::cout << std::endl;
@@ -1295,7 +1405,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 			if(Args.InputFilename.empty() || Args.ReplacementWavFilename.empty()
 				|| Args.OutputFilename.empty())
 			{
-				std::cerr << "Replacement requires a source bank, --replacement-wav, and --output." << std::endl;
+				std::cerr << "Replacement requires a source bank, --replacement-audio, and --output." << std::endl;
 				ReturnValue=1;
 			}
 			else if(Args.InputOffset < 0)
@@ -1307,8 +1417,45 @@ int _tmain(int Argc, _TCHAR* Argv[])
 			{
 				try
 				{
+					const SSc1SegmentInfo Target=InspectSc1AdpcmSegment(
+						Args.InputFilename, static_cast<unsigned long long>(Args.InputOffset));
+					std::string ReplacementFilename=Args.ReplacementWavFilename;
+					std::unique_ptr<CTemporaryWaveFile> TemporaryWave;
+					if(!IsSc1ReplacementWaveCompatible(ReplacementFilename,
+						Target.SampleRate, Target.SampleCount))
+					{
+						const std::wstring FfmpegPath=FindAudioToolOnPath(L"ffmpeg.exe");
+						if(FfmpegPath.empty())
+						{
+							throw std::runtime_error(
+								"ffmpeg.exe was not found on PATH. Install FFmpeg with "
+								"'winget install ffmpeg', then open a new PowerShell window and retry.");
+						}
+						std::wstring FfprobePath;
+						if(Args.ReplacementFitMode==EAFM_TIME_STRETCH)
+						{
+							FfprobePath=FindAudioToolOnPath(L"ffprobe.exe");
+							if(FfprobePath.empty())
+							{
+								throw std::runtime_error(
+									"ffprobe.exe was not found on PATH. Install FFmpeg with "
+									"'winget install ffmpeg', then open a new PowerShell window and retry.");
+							}
+						}
+						TemporaryWave.reset(new CTemporaryWaveFile());
+						ConvertAudioToSc1ReplacementWave(
+							FfmpegPath,
+							FfprobePath,
+							AnsiToWidePath(ReplacementFilename),
+							AnsiToWidePath(TemporaryWave->GetFilename()),
+							Target.SampleRate,
+							Target.SampleCount,
+							Args.ReplacementStartSeconds,
+							Args.ReplacementFitMode);
+						ReplacementFilename=TemporaryWave->GetFilename();
+					}
 					const SSc1SegmentInfo Result = ReplaceSc1AdpcmSegment(
-						Args.InputFilename, Args.ReplacementWavFilename, Args.OutputFilename,
+						Args.InputFilename, ReplacementFilename, Args.OutputFilename,
 						static_cast<unsigned long long>(Args.InputOffset));
 					std::cout << "Wrote " << Args.OutputFilename << " (replaced "
 						<< Result.SegmentSize << " bytes at bank offset "

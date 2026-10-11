@@ -223,6 +223,23 @@ namespace
 	}
 }
 
+std::wstring FindAudioToolOnPath(const std::wstring& Filename)
+{
+	const DWORD Required=SearchPathW(NULL, Filename.c_str(), NULL, 0, NULL, NULL);
+	if(!Required)
+	{
+		return std::wstring();
+	}
+	std::vector<wchar_t> Path(Required+1);
+	const DWORD Length=SearchPathW(NULL, Filename.c_str(), NULL,
+		static_cast<DWORD>(Path.size()), &Path[0], NULL);
+	if(!Length || Length>=Path.size())
+	{
+		return std::wstring();
+	}
+	return std::wstring(&Path[0], Length);
+}
+
 void ConvertAudioToSc1ReplacementWave(const std::wstring& FfmpegPath,
 	const std::wstring& FfprobePath, const std::wstring& InputPath,
 	const std::wstring& OutputPath, unsigned long SampleRate,

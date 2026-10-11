@@ -19,17 +19,17 @@ The executables require the [latest supported Microsoft Visual C++ Redistributab
 
 Audio replacement is an **experimental** feature and currently supports only mono 4-bit ADPCM segments in Splinter Cell 1 PC `.LS0` banks. Support for other Ubisoft games and audio formats may be added in the future.
 
-For the current Splinter Cell 1 implementation, replacement audio must ultimately be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. The CLI expects a WAV already in this format. An already compatible WAV can be used directly in the GUI as well. The GUI can also convert other audio files with an external FFmpeg installation: choose to trim longer audio or pad shorter audio with silence, or time-stretch the full audio while preserving pitch. Both modes let you choose a source start time. FFmpeg is not bundled; install it separately via `winget install ffmpeg`. Time-stretching also requires `ffprobe.exe`, normally distributed beside FFmpeg. This keeps DecUbiSnd's executable size unchanged.
+For the current Splinter Cell 1 implementation, replacement audio must ultimately be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. An already compatible WAV works without FFmpeg. The CLI and GUI can convert other audio files with external FFmpeg tools: trim longer audio or pad shorter audio with silence, or time-stretch the full audio while preserving pitch. Both modes allow a source start time. FFmpeg is not bundled. For incompatible audio, both the CLI and GUI require `ffmpeg.exe` on `PATH`; time-stretching also requires `ffprobe.exe` on `PATH`. On Windows, install FFmpeg with `winget install ffmpeg`, then open a new PowerShell window and restart DecUbiSnd. Keeping FFmpeg external avoids adding its binaries or libraries to DecUbiSnd's executables.
 
 The output can be the source bank itself to overwrite it; make a backup first. The bank is written through a temporary file and replaced only after encoding succeeds. The replacement audio file cannot also be the output file.
 
 CLI example:
 
 ```powershell
-DecUbiSnd.exe .\0_0_2.LS0 --replace --replacement-wav .\replacement.wav --offset 564212 --output .\0_0_2_replaced.LS0
+DecUbiSnd.exe .\0_0_2.LS0 --replace --replacement-audio .\replacement.mp3 --offset 564212 --fit stretch --start-seconds 1.5 --output .\0_0_2_replaced.LS0
 ```
 
-Use offset `0` for the first segment.
+Use offset `0` for the first segment. `--fit trim-pad` is the default: it keeps speed/pitch, trims longer audio, and pads shorter audio with silence. Use `--fit stretch` to fit the full source audio while preserving pitch. `--start-seconds` selects where conversion begins in the source. The existing `--replacement-wav` option remains available; compatible WAVs are used directly, and other audio inputs are converted.
 
 In the GUI, scan or open an `.LS0` bank, select one mono 4-bit segment, and choose **Replace Segment...**. The selected bank and byte offset are used automatically; choose a WAV or another audio file, a fit mode if conversion is needed, and an output bank. Select the loaded bank as the output to overwrite it; make a backup first. A successful write confirms format and size checks, not in-game playback, so verify the output with DecUbiSnd's decoder and listen before use.
 

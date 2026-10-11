@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Encoding\AudioConverter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Encoding\Sc1AdpcmEncoder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
