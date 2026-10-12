@@ -1359,7 +1359,7 @@ int _tmain(int Argc, _TCHAR* Argv[])
 		std::cout << "  --replacement-audio File   Audio file or prepared replacement WAV" << std::endl;
 		std::cout << "  --fit trim-pad|stretch     Fit audio (default: trim-pad)" << std::endl;
 		std::cout << "  --start-seconds Number     Source start time (default: 0)" << std::endl;
-		std::cout << "  Conversion requires ffmpeg.exe on PATH; stretch also needs ffprobe.exe" << std::endl;
+		std::cout << "  Audio conversion uses the bundled FFmpeg libraries" << std::endl;
 		std::cout << "  -i, --offset Number   Byte offset of the segment in the bank" << std::endl;
 		std::cout << "  -o, --output File     Write the replacement bank to this file" << std::endl;
 		std::cout << std::endl;
@@ -1424,28 +1424,8 @@ int _tmain(int Argc, _TCHAR* Argv[])
 					if(!IsSc1ReplacementWaveCompatible(ReplacementFilename,
 						Target.SampleRate, Target.SampleCount))
 					{
-						const std::wstring FfmpegPath=FindAudioToolOnPath(L"ffmpeg.exe");
-						if(FfmpegPath.empty())
-						{
-							throw std::runtime_error(
-								"ffmpeg.exe was not found on PATH. Install FFmpeg with "
-								"'winget install ffmpeg', then open a new PowerShell window and retry.");
-						}
-						std::wstring FfprobePath;
-						if(Args.ReplacementFitMode==EAFM_TIME_STRETCH)
-						{
-							FfprobePath=FindAudioToolOnPath(L"ffprobe.exe");
-							if(FfprobePath.empty())
-							{
-								throw std::runtime_error(
-									"ffprobe.exe was not found on PATH. Install FFmpeg with "
-									"'winget install ffmpeg', then open a new PowerShell window and retry.");
-							}
-						}
 						TemporaryWave.reset(new CTemporaryWaveFile());
 						ConvertAudioToSc1ReplacementWave(
-							FfmpegPath,
-							FfprobePath,
 							AnsiToWidePath(ReplacementFilename),
 							AnsiToWidePath(TemporaryWave->GetFilename()),
 							Target.SampleRate,

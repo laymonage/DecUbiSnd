@@ -7,5 +7,35 @@
     <VcpkgInstalledDir>$(MSBuildThisFileDirectory)vcpkg_static\</VcpkgInstalledDir>
     <VcpkgConfiguration>$(Configuration)</VcpkgConfiguration>
     <VcpkgTriplet>x86-windows-static-md</VcpkgTriplet>
+    <FFmpegInstalledDir>$(MSBuildThisFileDirectory)vcpkg_ffmpeg\installed\x86-windows\</FFmpegInstalledDir>
+    <FFmpegLibraryDirectory Condition="'$(Configuration)' == 'Debug'">$(FFmpegInstalledDir)debug\lib\</FFmpegLibraryDirectory>
+    <FFmpegLibraryDirectory Condition="'$(Configuration)' != 'Debug'">$(FFmpegInstalledDir)lib\</FFmpegLibraryDirectory>
+    <FFmpegRuntimeDirectory Condition="'$(Configuration)' == 'Debug'">$(FFmpegInstalledDir)debug\bin\</FFmpegRuntimeDirectory>
+    <FFmpegRuntimeDirectory Condition="'$(Configuration)' != 'Debug'">$(FFmpegInstalledDir)bin\</FFmpegRuntimeDirectory>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(FFmpegInstalledDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(FFmpegLibraryDirectory);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>avcodec.lib;avfilter.lib;avformat.lib;avutil.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <_FFmpegRuntimeDll Include="$(FFmpegRuntimeDirectory)*.dll" />
+  </ItemGroup>
+  <Target Name="ValidateFFmpegInstall" BeforeTargets="ClCompile">
+    <Error Condition="!Exists('$(FFmpegInstalledDir)include\libavformat\avformat.h')"
+           Text="FFmpeg development files are missing. Run 'vcpkg install --triplet=x86-windows --x-install-root=installed' from the vcpkg_ffmpeg directory." />
+    <Error Condition="'@(_FFmpegRuntimeDll)' == ''"
+           Text="FFmpeg runtime DLLs are missing from $(FFmpegRuntimeDirectory). Restore the vcpkg_ffmpeg manifest." />
+  </Target>
+  <Target Name="CopyFFmpegRuntime" AfterTargets="Build">
+    <ItemGroup>
+      <_FFmpegOutputDll Include="$(OutDir)avcodec-*.dll;$(OutDir)avfilter-*.dll;$(OutDir)avformat-*.dll;$(OutDir)avutil-*.dll;$(OutDir)swresample-*.dll" />
+    </ItemGroup>
+    <Delete Files="@(_FFmpegOutputDll)" />
+    <Copy SourceFiles="@(_FFmpegRuntimeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

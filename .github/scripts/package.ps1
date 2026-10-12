@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $vcpkg = Join-Path $root 'vcpkg_static\x86-windows-static-md'
+$ffmpegVcpkg = Join-Path $root 'vcpkg_ffmpeg\installed\x86-windows'
 
 $exes = @()
 if ($Target -in 'cli', 'all') { $exes += Join-Path $root "Decoding\$Configuration\DecUbiSnd.exe" }
@@ -21,6 +22,15 @@ foreach ($exe in $exes) {
     if ($Configuration -eq 'Debug' -and (Test-Path $pdb)) { Copy-Item $pdb $Output }
 }
 
+$ffmpegRuntime = if ($Configuration -eq 'Debug') {
+    Join-Path $ffmpegVcpkg 'debug\bin'
+} else {
+    Join-Path $ffmpegVcpkg 'bin'
+}
+$ffmpegDlls = Get-ChildItem $ffmpegRuntime -Filter '*.dll' -File
+if (-not $ffmpegDlls) { throw "FFmpeg runtime DLLs are missing from $ffmpegRuntime" }
+Copy-Item $ffmpegDlls.FullName $Output -Force
+
 if ($Configuration -eq 'Release') {
     if (-not (Get-Command upx -ErrorAction SilentlyContinue)) { throw 'upx is required for Release packaging. Install it with: winget install UPX.UPX' }
     foreach ($exe in $exes) {
@@ -31,11 +41,15 @@ if ($Configuration -eq 'Release') {
 
 if ($Configuration -eq 'Release') {
     Copy-Item (Join-Path $root 'README.md'), (Join-Path $root 'LICENSE') $Output
-    $ports = @('libogg', 'libvorbis')
+    $ports = @('ffmpeg', 'libogg', 'libvorbis')
     if ($Target -in 'gui', 'all') { $ports += 'wxwidgets' }
     foreach ($port in $ports) {
         $dest = Join-Path $Output "licenses\$port"
         New-Item $dest -ItemType Directory -Force | Out-Null
-        Copy-Item (Join-Path $vcpkg "share\$port\copyright") $dest
+        $licenseRoot = if ($port -eq 'ffmpeg') { $ffmpegVcpkg } else { $vcpkg }
+        Copy-Item (Join-Path $licenseRoot "share\$port\copyright") $dest
+        if ($port -eq 'ffmpeg') {
+            Copy-Item (Join-Path $licenseRoot 'share\ffmpeg\vcpkg.spdx.json') $dest
+        }
     }
 }

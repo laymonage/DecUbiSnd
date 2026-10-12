@@ -688,8 +688,6 @@ void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
 		ReplacementPath, Info.SampleRate, Info.SampleCount);
 	EAudioFitMode FitMode=EAFM_TRIM_PAD;
 	double StartSeconds=0;
-	std::wstring FfmpegPath;
-	std::wstring FfprobePath;
 	if(NeedsConversion)
 	{
 		const wxString FitChoices[] =
@@ -705,33 +703,6 @@ void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
 			return;
 		}
 		FitMode=FitDialog.GetSelection()==1 ? EAFM_TIME_STRETCH : EAFM_TRIM_PAD;
-
-		wxString MissingTools;
-		FfmpegPath=FindAudioToolOnPath(L"ffmpeg.exe");
-		if(FfmpegPath.empty())
-		{
-			MissingTools=wxT("ffmpeg.exe");
-		}
-		if(FitMode==EAFM_TIME_STRETCH)
-		{
-			FfprobePath=FindAudioToolOnPath(L"ffprobe.exe");
-			if(FfprobePath.empty())
-			{
-				if(!MissingTools.empty())
-				{
-					MissingTools.append(wxT(", "));
-				}
-				MissingTools.append(wxT("ffprobe.exe"));
-			}
-		}
-		if(!MissingTools.empty())
-		{
-			wxMessageBox(wxString::Format(
-				_("Audio conversion requires these tools on PATH: %s. Install FFmpeg with \"winget install ffmpeg\" in PowerShell, then restart DecUbiSnd."),
-				MissingTools),
-				_("FFmpeg required"), wxOK | wxICON_INFORMATION, this);
-			return;
-		}
 
 		wxTextEntryDialog StartDialog(this,
 			_("Start reading the source audio at this time (seconds)."),
@@ -771,8 +742,6 @@ void NDecGui::CMainDialog::OnReplaceSegmentButtonClicked(wxCommandEvent& Event)
 				throw std::runtime_error("unable to create a temporary WAV file");
 			}
 			ConvertAudioToSc1ReplacementWave(
-				FfmpegPath,
-				FfprobePath,
 				std::wstring(WaveDialog.GetPath().c_str()),
 				std::wstring(TemporaryWave.c_str()),
 				Info.SampleRate, Info.SampleCount, StartSeconds, FitMode);

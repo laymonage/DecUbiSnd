@@ -13,7 +13,7 @@ runs:
       uses: actions/checkout@v7.0.1
       with:
         repository: microsoft/vcpkg
-        ref: 2026.07.29
+        ref: e456309491fd875487bf02b8a0dca76c1b1b00cc
         path: vcpkg
 
     - name: Set up MSBuild
@@ -23,7 +23,7 @@ runs:
       uses: actions/cache@v6.1.0
       with:
         path: vcpkg-cache
-        key: vcpkg-x86-gui-${{ inputs.gui }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+        key: vcpkg-x86-gui-${{ inputs.gui }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg_ffmpeg/vcpkg.json', 'vcpkg_ffmpeg/vcpkg-lock.json') }}
 
     - name: Bootstrap vcpkg
       shell: pwsh
@@ -48,3 +48,10 @@ runs:
         $features = @()
         if ('${{ inputs.gui }}' -eq 'true') { $features += '--x-feature=gui' }
         .\vcpkg\vcpkg.exe install --triplet x86-windows-static-md --x-install-root=vcpkg_static @features
+        Push-Location .\vcpkg_ffmpeg
+        try {
+          & ..\vcpkg\vcpkg.exe install --triplet x86-windows --x-install-root=installed
+          if ($LASTEXITCODE -ne 0) { throw "FFmpeg dependency installation failed with exit code $LASTEXITCODE" }
+        } finally {
+          Pop-Location
+        }

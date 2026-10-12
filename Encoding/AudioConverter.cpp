@@ -4,304 +4,541 @@
 #include <windows.h>
 
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <limits>
+#include <locale>
+#include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
-#include <vector>
+
+extern "C"
+{
+#include <libavcodec/avcodec.h>
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
+#include <libavformat/avformat.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/error.h>
+#include <libavutil/mathematics.h>
+#include <libavutil/mem.h>
+#include <libavutil/samplefmt.h>
+}
 
 #include "AudioConverter.h"
 
 namespace
 {
-	std::wstring QuoteArgument(const std::wstring& Argument)
+	struct SFFmpegResources
 	{
-		std::wstring Quoted(1, L'"');
-		size_t Backslashes = 0;
-		for(std::wstring::const_iterator Iter = Argument.begin(); Iter != Argument.end(); ++Iter)
+		AVFormatContext* Input = NULL;
+		AVCodecContext* Decoder = NULL;
+		AVPacket* Packet = NULL;
+		AVFrame* DecodedFrame = NULL;
+		AVFrame* FilterFrame = NULL;
+		AVFilterGraph* FilterGraph = NULL;
+		AVFilterContext* FilterSource = NULL;
+		AVFilterContext* FilterSink = NULL;
+		AVFilterInOut* FilterInputs = NULL;
+		AVFilterInOut* FilterOutputs = NULL;
+
+		~SFFmpegResources()
 		{
-			if(*Iter == L'\\')
-			{
-				++Backslashes;
-			}
-			else if(*Iter == L'"')
-			{
-				Quoted.append(Backslashes * 2 + 1, L'\\');
-				Quoted.push_back(*Iter);
-				Backslashes = 0;
-			}
-			else
-			{
-				Quoted.append(Backslashes, L'\\');
-				Quoted.push_back(*Iter);
-				Backslashes = 0;
-			}
+			avfilter_inout_free(&FilterInputs);
+			avfilter_inout_free(&FilterOutputs);
+			av_frame_free(&FilterFrame);
+			av_frame_free(&DecodedFrame);
+			av_packet_free(&Packet);
+			avcodec_free_context(&Decoder);
+			avformat_close_input(&Input);
+			avfilter_graph_free(&FilterGraph);
 		}
-		Quoted.append(Backslashes * 2, L'\\');
-		Quoted.push_back(L'"');
-		return Quoted;
+	};
+
+	std::string GetFfmpegError(int ErrorCode)
+	{
+		char Message[AV_ERROR_MAX_STRING_SIZE];
+		if(av_strerror(ErrorCode, Message, sizeof(Message)) < 0)
+		{
+			return "unknown FFmpeg error";
+		}
+		return Message;
 	}
 
-	std::wstring MakeCommandLine(const std::wstring& Executable,
-		const std::vector<std::wstring>& Arguments)
+	void CheckFfmpeg(int ErrorCode, const char* Action)
 	{
-		std::wstring Command = QuoteArgument(Executable);
-		for(std::vector<std::wstring>::const_iterator Iter = Arguments.begin();
-			Iter != Arguments.end(); ++Iter)
+		if(ErrorCode < 0)
 		{
-			Command.push_back(L' ');
-			Command.append(QuoteArgument(*Iter));
+			throw std::runtime_error(std::string(Action) + ": "
+				+ GetFfmpegError(ErrorCode));
 		}
-		if(Command.size() >= 32767)
-		{
-			throw std::runtime_error("FFmpeg command line is too long");
-		}
-		return Command;
 	}
 
-	std::string FormatWindowsError(const char* Action)
+	std::string WidePathToUtf8(const std::wstring& Path)
 	{
-		return std::string(Action) + " (Windows error "
-			+ std::to_string(GetLastError()) + ")";
+		const int Required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
+			Path.c_str(), -1, NULL, 0, NULL, NULL);
+		if(!Required)
+		{
+			throw std::runtime_error("unable to encode the input path as UTF-8");
+		}
+		std::string Utf8(static_cast<size_t>(Required), '\0');
+		if(!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, Path.c_str(), -1,
+			&Utf8[0], Required, NULL, NULL))
+		{
+			throw std::runtime_error("unable to encode the input path as UTF-8");
+		}
+		Utf8.resize(static_cast<size_t>(Required - 1));
+		return Utf8;
 	}
 
-	DWORD RunProcess(const std::wstring& Executable,
-		const std::vector<std::wstring>& Arguments, std::string* StandardOutput)
+	class CWaveWriter
 	{
-		SECURITY_ATTRIBUTES Security;
-		ZeroMemory(&Security, sizeof(Security));
-		Security.nLength = sizeof(Security);
-		Security.bInheritHandle = TRUE;
-
-		HANDLE NullDevice = CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, &Security, OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL, NULL);
-		if(NullDevice == INVALID_HANDLE_VALUE)
+	public:
+		CWaveWriter(const std::wstring& Path, unsigned long SampleRate,
+			unsigned long SampleCount)
+			: m_File(NULL), m_SampleRate(SampleRate), m_SampleCount(SampleCount),
+			m_WrittenSamples(0)
 		{
-			throw std::runtime_error(FormatWindowsError("unable to open NUL device"));
-		}
-
-		HANDLE ReadPipe = NULL;
-		HANDLE WritePipe = NULL;
-		if(StandardOutput)
-		{
-			if(!CreatePipe(&ReadPipe, &WritePipe, &Security, 0))
+			if(SampleCount > (std::numeric_limits<uint32_t>::max() - 36U) / 2U)
 			{
-				const std::string Error = FormatWindowsError("unable to create FFprobe output pipe");
-				CloseHandle(NullDevice);
-				throw std::runtime_error(Error);
+				throw std::runtime_error("replacement WAV would exceed the RIFF size limit");
 			}
-			if(!SetHandleInformation(ReadPipe, HANDLE_FLAG_INHERIT, 0))
+			if(_wfopen_s(&m_File, Path.c_str(), L"wb") != 0 || !m_File)
 			{
-				const std::string Error = FormatWindowsError("unable to configure FFprobe output pipe");
-				CloseHandle(ReadPipe);
-				CloseHandle(WritePipe);
-				CloseHandle(NullDevice);
-				throw std::runtime_error(Error);
+				throw std::runtime_error("unable to create the temporary replacement WAV");
+			}
+			try
+			{
+				WriteHeader(0);
+			}
+			catch(...)
+			{
+				fclose(m_File);
+				m_File = NULL;
+				throw;
 			}
 		}
 
-		STARTUPINFOW Startup;
-		ZeroMemory(&Startup, sizeof(Startup));
-		Startup.cb = sizeof(Startup);
-		Startup.dwFlags = STARTF_USESTDHANDLES;
-		Startup.hStdInput = NullDevice;
-		Startup.hStdOutput = StandardOutput ? WritePipe : NullDevice;
-		Startup.hStdError = NullDevice;
-		std::wstring Command = MakeCommandLine(Executable, Arguments);
-		PROCESS_INFORMATION Process;
-		ZeroMemory(&Process, sizeof(Process));
-		const BOOL Started = CreateProcessW(Executable.c_str(), &Command[0], NULL, NULL,
-			TRUE, CREATE_NO_WINDOW, NULL, NULL, &Startup, &Process);
-		const DWORD StartError = GetLastError();
-		if(WritePipe)
+		~CWaveWriter()
 		{
-			CloseHandle(WritePipe);
-		}
-		CloseHandle(NullDevice);
-		if(!Started)
-		{
-			if(ReadPipe)
+			if(m_File)
 			{
-				CloseHandle(ReadPipe);
+				fclose(m_File);
 			}
-			throw std::runtime_error("unable to launch FFmpeg/FFprobe (Windows error "
-				+ std::to_string(StartError) + ")");
 		}
 
-		if(StandardOutput)
+		void WriteSamples(const int16_t* Samples, size_t Count)
 		{
-			StandardOutput->clear();
-			char Buffer[1024];
-			DWORD BytesRead = 0;
-			while(ReadFile(ReadPipe, Buffer, sizeof(Buffer), &BytesRead, NULL) && BytesRead)
+			const uint64_t Remaining = m_SampleCount - m_WrittenSamples;
+			const size_t ToWrite = static_cast<size_t>(
+				Remaining < Count ? Remaining : Count);
+			if(ToWrite && fwrite(Samples, sizeof(int16_t), ToWrite, m_File) != ToWrite)
 			{
-				StandardOutput->append(Buffer, BytesRead);
+				throw std::runtime_error("unable to write converted audio samples");
 			}
-			CloseHandle(ReadPipe);
+			m_WrittenSamples += ToWrite;
 		}
-		WaitForSingleObject(Process.hProcess, INFINITE);
-		DWORD ExitCode = 1;
-		GetExitCodeProcess(Process.hProcess, &ExitCode);
-		CloseHandle(Process.hThread);
-		CloseHandle(Process.hProcess);
-		return ExitCode;
-	}
 
-	double ProbeDuration(const std::wstring& FfprobePath, const std::wstring& InputPath)
+		void Finish()
+		{
+			int16_t Silence[4096] = {};
+			while(m_WrittenSamples < m_SampleCount)
+			{
+				const uint64_t Remaining = m_SampleCount - m_WrittenSamples;
+				const size_t ToWrite = static_cast<size_t>(
+					Remaining < sizeof(Silence) / sizeof(Silence[0])
+						? Remaining : sizeof(Silence) / sizeof(Silence[0]));
+				if(fwrite(Silence, sizeof(int16_t), ToWrite, m_File) != ToWrite)
+				{
+					throw std::runtime_error("unable to pad converted audio samples");
+				}
+				m_WrittenSamples += ToWrite;
+			}
+
+			if(_fseeki64(m_File, 0, SEEK_SET) != 0)
+			{
+				throw std::runtime_error("unable to finalize the replacement WAV header");
+			}
+			WriteHeader(static_cast<uint32_t>(m_SampleCount * 2U));
+			if(fflush(m_File) != 0)
+			{
+				throw std::runtime_error("unable to flush the replacement WAV file");
+			}
+			const int CloseResult = fclose(m_File);
+			m_File = NULL;
+			if(CloseResult != 0)
+			{
+				throw std::runtime_error("unable to close the replacement WAV file");
+			}
+		}
+
+	private:
+		static void WriteBytes(FILE* File, const char* Bytes, size_t Count)
+		{
+			if(fwrite(Bytes, 1, Count, File) != Count)
+			{
+				throw std::runtime_error("unable to write the replacement WAV header");
+			}
+		}
+
+		static void WriteUint16(FILE* File, uint16_t Value)
+		{
+			const unsigned char Bytes[2] = {
+				static_cast<unsigned char>(Value),
+				static_cast<unsigned char>(Value >> 8)
+			};
+			WriteBytes(File, reinterpret_cast<const char*>(Bytes), sizeof(Bytes));
+		}
+
+		static void WriteUint32(FILE* File, uint32_t Value)
+		{
+			const unsigned char Bytes[4] = {
+				static_cast<unsigned char>(Value),
+				static_cast<unsigned char>(Value >> 8),
+				static_cast<unsigned char>(Value >> 16),
+				static_cast<unsigned char>(Value >> 24)
+			};
+			WriteBytes(File, reinterpret_cast<const char*>(Bytes), sizeof(Bytes));
+		}
+
+		void WriteHeader(uint32_t DataSize)
+		{
+			WriteBytes(m_File, "RIFF", 4);
+			WriteUint32(m_File, 36U + DataSize);
+			WriteBytes(m_File, "WAVEfmt ", 8);
+			WriteUint32(m_File, 16);
+			WriteUint16(m_File, 1);
+			WriteUint16(m_File, 1);
+			WriteUint32(m_File, static_cast<uint32_t>(m_SampleRate));
+			WriteUint32(m_File, static_cast<uint32_t>(m_SampleRate * 2U));
+			WriteUint16(m_File, 2);
+			WriteUint16(m_File, 16);
+			WriteBytes(m_File, "data", 4);
+			WriteUint32(m_File, DataSize);
+		}
+
+		FILE* m_File;
+		unsigned long m_SampleRate;
+		unsigned long m_SampleCount;
+		uint64_t m_WrittenSamples;
+	};
+
+	void DrainFilter(SFFmpegResources& Resources, CWaveWriter& Writer,
+		bool RequireEndOfStream = false)
 	{
-		std::vector<std::wstring> Arguments;
-		Arguments.push_back(L"-v");
-		Arguments.push_back(L"error");
-		Arguments.push_back(L"-select_streams");
-		Arguments.push_back(L"a:0");
-		Arguments.push_back(L"-show_entries");
-		Arguments.push_back(L"stream=duration");
-		Arguments.push_back(L"-of");
-		Arguments.push_back(L"default=noprint_wrappers=1:nokey=1");
-		Arguments.push_back(InputPath);
-		std::string Output;
-		DWORD ExitCode=RunProcess(FfprobePath, Arguments, &Output);
-		char* End=NULL;
-		double Duration=ExitCode==0 ? strtod(Output.c_str(), &End) : 0;
-		if(End==Output.c_str() || !std::isfinite(Duration) || Duration<=0)
+		for(;;)
 		{
-			Arguments[5]=L"format=duration";
-			Output.clear();
-			ExitCode=RunProcess(FfprobePath, Arguments, &Output);
-			End=NULL;
-			Duration=ExitCode==0 ? strtod(Output.c_str(), &End) : 0;
+			const int Result = av_buffersink_get_frame(Resources.FilterSink,
+				Resources.FilterFrame);
+			if(Result == AVERROR(EAGAIN))
+			{
+				if(RequireEndOfStream)
+				{
+					throw std::runtime_error("audio filter stopped before reaching end of stream");
+				}
+				return;
+			}
+			if(Result == AVERROR_EOF)
+			{
+				return;
+			}
+			CheckFfmpeg(Result, "unable to read filtered audio");
+			if(Resources.FilterFrame->format != AV_SAMPLE_FMT_S16
+				|| Resources.FilterFrame->ch_layout.nb_channels != 1
+				|| Resources.FilterFrame->nb_samples < 0)
+			{
+				throw std::runtime_error("FFmpeg produced audio in an unexpected format");
+			}
+			Writer.WriteSamples(
+				reinterpret_cast<const int16_t*>(Resources.FilterFrame->extended_data[0]),
+				static_cast<size_t>(Resources.FilterFrame->nb_samples));
+			av_frame_unref(Resources.FilterFrame);
 		}
-		if(End == Output.c_str() || !std::isfinite(Duration) || Duration <= 0)
-		{
-			throw std::runtime_error("FFprobe could not read a valid source audio duration");
-		}
-		return Duration;
 	}
 
-	std::wstring FormatSeconds(double Seconds)
+	int DrainDecoder(SFFmpegResources& Resources, CWaveWriter& Writer,
+		int64_t& NextPts)
 	{
-		wchar_t Buffer[64];
-		if(swprintf_s(Buffer, sizeof(Buffer) / sizeof(Buffer[0]), L"%.9f", Seconds) < 0)
+		int FramesDecoded = 0;
+		for(;;)
 		{
-			throw std::runtime_error("unable to format audio seek time");
+			const int Result = avcodec_receive_frame(Resources.Decoder,
+				Resources.DecodedFrame);
+			if(Result == AVERROR(EAGAIN) || Result == AVERROR_EOF)
+			{
+				return FramesDecoded;
+			}
+			CheckFfmpeg(Result, "unable to decode source audio");
+			++FramesDecoded;
+			if(Resources.DecodedFrame->sample_rate != Resources.Decoder->sample_rate)
+			{
+				throw std::runtime_error("source audio changes sample rate while decoding");
+			}
+			if(Resources.DecodedFrame->nb_samples < 0
+				|| NextPts > std::numeric_limits<int64_t>::max()
+					- Resources.DecodedFrame->nb_samples)
+			{
+				throw std::runtime_error("source audio is too long to convert");
+			}
+			Resources.DecodedFrame->pts = NextPts;
+			NextPts += Resources.DecodedFrame->nb_samples;
+			CheckFfmpeg(av_buffersrc_add_frame_flags(Resources.FilterSource,
+				Resources.DecodedFrame, AV_BUFFERSRC_FLAG_KEEP_REF),
+				"unable to pass decoded audio to the filter");
+			DrainFilter(Resources, Writer);
+			av_frame_unref(Resources.DecodedFrame);
 		}
-		return Buffer;
 	}
 
-	std::wstring MakeAtempoFilter(double Tempo)
+	void SendPacket(SFFmpegResources& Resources, const AVPacket* Packet,
+		CWaveWriter& Writer, int64_t& NextPts)
+	{
+		for(;;)
+		{
+			const int Result = avcodec_send_packet(Resources.Decoder, Packet);
+			if(Result == AVERROR(EAGAIN))
+			{
+				if(DrainDecoder(Resources, Writer, NextPts) > 0)
+				{
+					continue;
+				}
+				throw std::runtime_error("audio decoder made no progress while sending a packet");
+			}
+			CheckFfmpeg(Result, "unable to submit source audio for decoding");
+			break;
+		}
+		DrainDecoder(Resources, Writer, NextPts);
+	}
+
+	std::string MakeAtempoFilter(double Tempo)
 	{
 		if(!std::isfinite(Tempo) || Tempo <= 0)
 		{
 			throw std::runtime_error("calculated time-stretch factor is invalid");
 		}
-		std::wstring Filter;
+		std::ostringstream Filter;
+		Filter.imbue(std::locale::classic());
+		size_t FilterCount = 0;
 		while(Tempo > 2.0)
 		{
-			if(!Filter.empty())
-			{
-				Filter.append(L",");
-			}
-			Filter.append(L"atempo=2");
+			Filter << (FilterCount++ ? "," : "") << "atempo=2";
 			Tempo /= 2.0;
 		}
 		while(Tempo < 0.5)
 		{
-			if(!Filter.empty())
-			{
-				Filter.append(L",");
-			}
-			Filter.append(L"atempo=0.5");
+			Filter << (FilterCount++ ? "," : "") << "atempo=0.5";
 			Tempo /= 0.5;
 		}
-		if(!Filter.empty())
+		Filter << (FilterCount++ ? "," : "") << "atempo=" << Tempo;
+		return Filter.str();
+	}
+
+	void ConfigureFilterGraph(SFFmpegResources& Resources,
+		unsigned long SampleRate, unsigned long SampleCount,
+		int64_t StartSample, const std::string& TempoFilter)
+	{
+		Resources.FilterGraph = avfilter_graph_alloc();
+		if(!Resources.FilterGraph)
 		{
-			Filter.append(L",");
+			throw std::runtime_error("unable to allocate the audio filter graph");
 		}
-		Filter.append(L"atempo=");
-		Filter.append(FormatSeconds(Tempo));
-		return Filter;
+
+		const AVFilter* BufferFilter = avfilter_get_by_name("abuffer");
+		const AVFilter* SinkFilter = avfilter_get_by_name("abuffersink");
+		if(!BufferFilter || !SinkFilter)
+		{
+			throw std::runtime_error("FFmpeg audio buffer filters are unavailable");
+		}
+
+		if(Resources.Decoder->ch_layout.nb_channels <= 0)
+		{
+			throw std::runtime_error("source audio has no channel layout");
+		}
+		if(Resources.Decoder->ch_layout.order != AV_CHANNEL_ORDER_NATIVE)
+		{
+			av_channel_layout_default(&Resources.Decoder->ch_layout,
+				Resources.Decoder->ch_layout.nb_channels);
+		}
+
+		std::ostringstream SourceArguments;
+		SourceArguments.imbue(std::locale::classic());
+		SourceArguments << "time_base=1/" << Resources.Decoder->sample_rate
+			<< ":sample_rate=" << Resources.Decoder->sample_rate
+			<< ":sample_fmt="
+			<< av_get_sample_fmt_name(Resources.Decoder->sample_fmt)
+			<< ":channel_layout=0x" << std::hex
+			<< Resources.Decoder->ch_layout.u.mask;
+		CheckFfmpeg(avfilter_graph_create_filter(&Resources.FilterSource,
+			BufferFilter, "in", SourceArguments.str().c_str(), NULL,
+			Resources.FilterGraph), "unable to create the audio filter source");
+		CheckFfmpeg(avfilter_graph_create_filter(&Resources.FilterSink,
+			SinkFilter, "out", NULL, NULL, Resources.FilterGraph),
+			"unable to create the audio filter output");
+
+		Resources.FilterOutputs = avfilter_inout_alloc();
+		Resources.FilterInputs = avfilter_inout_alloc();
+		if(!Resources.FilterOutputs || !Resources.FilterInputs)
+		{
+			throw std::runtime_error("unable to allocate audio filter connections");
+		}
+		Resources.FilterOutputs->name = av_strdup("in");
+		Resources.FilterOutputs->filter_ctx = Resources.FilterSource;
+		Resources.FilterOutputs->pad_idx = 0;
+		Resources.FilterInputs->name = av_strdup("out");
+		Resources.FilterInputs->filter_ctx = Resources.FilterSink;
+		Resources.FilterInputs->pad_idx = 0;
+		if(!Resources.FilterOutputs->name || !Resources.FilterInputs->name)
+		{
+			throw std::runtime_error("unable to name audio filter connections");
+		}
+
+		std::ostringstream Description;
+		Description << "atrim=start_sample=" << StartSample
+			<< ",asetpts=PTS-STARTPTS";
+		if(!TempoFilter.empty())
+		{
+			Description << "," << TempoFilter;
+		}
+		Description << ",aresample=" << SampleRate
+			<< ",aformat=sample_fmts=s16:sample_rates=" << SampleRate
+			<< ":channel_layouts=mono,apad=whole_len=" << SampleCount
+			<< ",atrim=end_sample=" << SampleCount;
+		const std::string FilterDescription = Description.str();
+		CheckFfmpeg(avfilter_graph_parse_ptr(Resources.FilterGraph,
+			FilterDescription.c_str(), &Resources.FilterInputs,
+			&Resources.FilterOutputs, NULL),
+			"unable to configure audio conversion filters");
+		avfilter_inout_free(&Resources.FilterInputs);
+		avfilter_inout_free(&Resources.FilterOutputs);
+		CheckFfmpeg(avfilter_graph_config(Resources.FilterGraph, NULL),
+			"unable to initialize audio conversion filters");
+	}
+
+	double GetSourceDuration(const AVFormatContext* Input, const AVStream* Stream)
+	{
+		if(Stream->duration != AV_NOPTS_VALUE && Stream->duration > 0)
+		{
+			return Stream->duration * av_q2d(Stream->time_base);
+		}
+		if(Input->duration != AV_NOPTS_VALUE && Input->duration > 0)
+		{
+			return static_cast<double>(Input->duration) / AV_TIME_BASE;
+		}
+		return 0;
 	}
 }
 
-std::wstring FindAudioToolOnPath(const std::wstring& Filename)
-{
-	const DWORD Required=SearchPathW(NULL, Filename.c_str(), NULL, 0, NULL, NULL);
-	if(!Required)
-	{
-		return std::wstring();
-	}
-	std::vector<wchar_t> Path(Required+1);
-	const DWORD Length=SearchPathW(NULL, Filename.c_str(), NULL,
-		static_cast<DWORD>(Path.size()), &Path[0], NULL);
-	if(!Length || Length>=Path.size())
-	{
-		return std::wstring();
-	}
-	return std::wstring(&Path[0], Length);
-}
-
-void ConvertAudioToSc1ReplacementWave(const std::wstring& FfmpegPath,
-	const std::wstring& FfprobePath, const std::wstring& InputPath,
+void ConvertAudioToSc1ReplacementWave(const std::wstring& InputPath,
 	const std::wstring& OutputPath, unsigned long SampleRate,
 	unsigned long SampleCount, double StartSeconds, EAudioFitMode FitMode)
 {
-	if(FfmpegPath.empty() || InputPath.empty() || OutputPath.empty())
+	if(InputPath.empty() || OutputPath.empty())
 	{
-		throw std::runtime_error("FFmpeg, input audio, and output WAV paths are required");
+		throw std::runtime_error("input audio and output WAV paths are required");
 	}
-	if(!SampleRate || !SampleCount || !std::isfinite(StartSeconds) || StartSeconds < 0)
+	if(!SampleRate || !SampleCount || !std::isfinite(StartSeconds)
+		|| StartSeconds < 0)
 	{
 		throw std::runtime_error("invalid target audio format or source start time");
 	}
+	if(FitMode != EAFM_TRIM_PAD && FitMode != EAFM_TIME_STRETCH)
+	{
+		throw std::runtime_error("invalid audio fit mode");
+	}
+	if(SampleRate > std::numeric_limits<uint32_t>::max() / 2U)
+	{
+		throw std::runtime_error("replacement WAV sample rate is too large");
+	}
+	if(SampleCount > (std::numeric_limits<uint32_t>::max() - 36U) / 2U)
+	{
+		throw std::runtime_error("replacement WAV would exceed the RIFF size limit");
+	}
 
-	std::wstring Filter = L"aresample=" + std::to_wstring(SampleRate);
+	SFFmpegResources Resources;
+	const std::string InputPathUtf8 = WidePathToUtf8(InputPath);
+	CheckFfmpeg(avformat_open_input(&Resources.Input, InputPathUtf8.c_str(),
+		NULL, NULL), "unable to open source audio");
+	CheckFfmpeg(avformat_find_stream_info(Resources.Input, NULL),
+		"unable to read source audio information");
+
+	const AVCodec* Decoder = NULL;
+	const int AudioStreamIndex = av_find_best_stream(Resources.Input,
+		AVMEDIA_TYPE_AUDIO, -1, -1, &Decoder, 0);
+	CheckFfmpeg(AudioStreamIndex, "source file contains no decodable audio stream");
+	if(!Decoder)
+	{
+		throw std::runtime_error("no decoder is available for the source audio format");
+	}
+	AVStream* AudioStream = Resources.Input->streams[AudioStreamIndex];
+	Resources.Decoder = avcodec_alloc_context3(Decoder);
+	if(!Resources.Decoder)
+	{
+		throw std::runtime_error("unable to allocate the source audio decoder");
+	}
+	CheckFfmpeg(avcodec_parameters_to_context(Resources.Decoder,
+		AudioStream->codecpar), "unable to configure the source audio decoder");
+	CheckFfmpeg(avcodec_open2(Resources.Decoder, Decoder, NULL),
+		"unable to open the source audio decoder");
+	if(Resources.Decoder->sample_rate <= 0
+		|| Resources.Decoder->sample_fmt == AV_SAMPLE_FMT_NONE)
+	{
+		throw std::runtime_error("source audio has an invalid sample format");
+	}
+
+	const long double StartSamples = static_cast<long double>(StartSeconds)
+		* Resources.Decoder->sample_rate;
+	if(!std::isfinite(StartSamples)
+		|| StartSamples > std::numeric_limits<int64_t>::max() - 0.5L)
+	{
+		throw std::runtime_error("source start time is too large");
+	}
+	const int64_t StartSample = static_cast<int64_t>(std::floor(StartSamples + 0.5L));
+
+	std::string TempoFilter;
 	if(FitMode == EAFM_TIME_STRETCH)
 	{
-		if(FfprobePath.empty())
+		const double SourceDuration = GetSourceDuration(Resources.Input, AudioStream)
+			- StartSeconds;
+		if(!std::isfinite(SourceDuration) || SourceDuration <= 0)
 		{
-			throw std::runtime_error("time-stretch mode requires ffprobe.exe beside ffmpeg.exe or on PATH");
-		}
-		const double SourceDuration = ProbeDuration(FfprobePath, InputPath) - StartSeconds;
-		if(SourceDuration <= 0)
-		{
-			throw std::runtime_error("source start time is at or beyond the end of the audio");
+			throw std::runtime_error(
+				"source start time is at or beyond the end of the audio, or its duration is unavailable");
 		}
 		const double TargetDuration = static_cast<double>(SampleCount) / SampleRate;
-		Filter.append(L",");
-		Filter.append(MakeAtempoFilter(SourceDuration / TargetDuration));
+		TempoFilter = MakeAtempoFilter(SourceDuration / TargetDuration);
 	}
-	Filter.append(L",apad,atrim=end_sample=");
-	Filter.append(std::to_wstring(SampleCount));
 
-	std::vector<std::wstring> Arguments;
-	Arguments.push_back(L"-nostdin");
-	Arguments.push_back(L"-hide_banner");
-	Arguments.push_back(L"-loglevel");
-	Arguments.push_back(L"error");
-	Arguments.push_back(L"-y");
-	Arguments.push_back(L"-ss");
-	Arguments.push_back(FormatSeconds(StartSeconds));
-	Arguments.push_back(L"-i");
-	Arguments.push_back(InputPath);
-	Arguments.push_back(L"-map");
-	Arguments.push_back(L"0:a:0");
-	Arguments.push_back(L"-vn");
-	Arguments.push_back(L"-sn");
-	Arguments.push_back(L"-dn");
-	Arguments.push_back(L"-af");
-	Arguments.push_back(Filter);
-	Arguments.push_back(L"-ac");
-	Arguments.push_back(L"1");
-	Arguments.push_back(L"-ar");
-	Arguments.push_back(std::to_wstring(SampleRate));
-	Arguments.push_back(L"-c:a");
-	Arguments.push_back(L"pcm_s16le");
-	Arguments.push_back(L"-f");
-	Arguments.push_back(L"wav");
-	Arguments.push_back(OutputPath);
-
-	if(RunProcess(FfmpegPath, Arguments, NULL) != 0)
+	ConfigureFilterGraph(Resources, SampleRate, SampleCount, StartSample,
+		TempoFilter);
+	Resources.Packet = av_packet_alloc();
+	Resources.DecodedFrame = av_frame_alloc();
+	Resources.FilterFrame = av_frame_alloc();
+	if(!Resources.Packet || !Resources.DecodedFrame || !Resources.FilterFrame)
 	{
-		throw std::runtime_error("FFmpeg failed to convert the selected audio file");
+		throw std::runtime_error("unable to allocate FFmpeg audio buffers");
 	}
+
+	CWaveWriter Writer(OutputPath, SampleRate, SampleCount);
+	int64_t NextPts = 0;
+	int Result = 0;
+	while((Result = av_read_frame(Resources.Input, Resources.Packet)) >= 0)
+	{
+		if(Resources.Packet->stream_index == AudioStreamIndex)
+		{
+			SendPacket(Resources, Resources.Packet, Writer, NextPts);
+		}
+		av_packet_unref(Resources.Packet);
+	}
+	if(Result != AVERROR_EOF)
+	{
+		CheckFfmpeg(Result, "unable to read source audio packets");
+	}
+	SendPacket(Resources, NULL, Writer, NextPts);
+	CheckFfmpeg(av_buffersrc_add_frame_flags(Resources.FilterSource, NULL, 0),
+		"unable to flush audio conversion filters");
+	DrainFilter(Resources, Writer, true);
+	Writer.Finish();
 }

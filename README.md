@@ -8,10 +8,13 @@ On Windows, install Visual Studio with the C++ workload and make `vcpkg` availab
 
 ```powershell
 vcpkg install --triplet x86-windows-static-md --x-install-root=vcpkg_static --x-feature=gui
+Push-Location .\vcpkg_ffmpeg
+vcpkg install --triplet x86-windows --x-install-root=installed
+Pop-Location
 msbuild Package.proj /t:BuildAll /p:Configuration=Release /p:Platform=Win32
 ```
 
-The projects use [vcpkg's MSBuild integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/msbuild-integration) for include paths and library linking; the explicit install step selects the optional GUI feature in the shared install tree.
+The projects use [vcpkg's MSBuild integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/msbuild-integration) for existing static dependencies. FFmpeg is installed separately with the dynamic `x86-windows` triplet so only its runtime DLLs are shipped with the applications, and its manifest pins an independent registry baseline so it can be upgraded without changing the existing dependency versions. The explicit static install step selects the optional GUI feature in the shared install tree.
 
 The executables require the [latest supported Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) to run.
 
@@ -19,7 +22,7 @@ The executables require the [latest supported Microsoft Visual C++ Redistributab
 
 Audio replacement is an **experimental** feature and currently supports only mono 4-bit ADPCM segments in Splinter Cell 1 PC `.LS0` banks. Support for other Ubisoft games and audio formats may be added in the future.
 
-For the current Splinter Cell 1 implementation, replacement audio must ultimately be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. An already compatible WAV works without FFmpeg. The CLI and GUI can convert other audio files with external FFmpeg tools: trim longer audio or pad shorter audio with silence, or time-stretch the full audio while preserving pitch. Both modes allow a source start time. FFmpeg is not bundled. For incompatible audio, both the CLI and GUI require `ffmpeg.exe` on `PATH`; time-stretching also requires `ffprobe.exe` on `PATH`. On Windows, install FFmpeg with `winget install ffmpeg`, then open a new PowerShell window and restart DecUbiSnd. Keeping FFmpeg external avoids adding its binaries or libraries to DecUbiSnd's executables.
+For the current Splinter Cell 1 implementation, replacement audio must ultimately be mono signed 16-bit PCM at 36 kHz and contain exactly the target segment's sample count. An already compatible WAV is used directly. The CLI and GUI include FFmpeg libraries to convert other audio files: trim longer audio or pad shorter audio with silence, or time-stretch the full audio while preserving pitch. Both modes allow a source start time. No separate FFmpeg installation is needed.
 
 The output can be the source bank itself to overwrite it; make a backup first. The bank is written through a temporary file and replaced only after encoding succeeds. The replacement audio file cannot also be the output file.
 

@@ -51,6 +51,7 @@ packages/
 # vcpkg artifacts (manifest mode)
 vcpkg_installed/
 vcpkg_static/
+vcpkg_ffmpeg/installed/
 
 # OS files
 .DS_Store

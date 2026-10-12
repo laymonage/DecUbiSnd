@@ -9,13 +9,9 @@ enum EAudioFitMode
 };
 
 void ConvertAudioToSc1ReplacementWave(
-	const std::wstring& FfmpegPath,
-	const std::wstring& FfprobePath,
 	const std::wstring& InputPath,
 	const std::wstring& OutputPath,
 	unsigned long SampleRate,
 	unsigned long SampleCount,
 	double StartSeconds,
 	EAudioFitMode FitMode);
-
-std::wstring FindAudioToolOnPath(const std::wstring& Filename);
