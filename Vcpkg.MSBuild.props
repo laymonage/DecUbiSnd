@@ -19,7 +19,8 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(FFmpegLibraryDirectory);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>avcodec.lib;avfilter.lib;avformat.lib;avutil.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>avcodec.lib;avfilter.lib;avformat.lib;avutil.lib;delayimp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>avcodec-63.dll;avfilter-12.dll;avformat-63.dll;avutil-61.dll</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

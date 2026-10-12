@@ -9,6 +9,7 @@
 #include <limits>
 #include <locale>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -31,6 +32,39 @@ extern "C"
 
 namespace
 {
+	void LoadFFmpegLibraries()
+	{
+		const char* Libraries[] =
+		{
+			"avutil-61.dll",
+			"avcodec-63.dll",
+			"avformat-63.dll",
+			"avfilter-12.dll"
+		};
+		static HMODULE LoadedLibraries[sizeof(Libraries) / sizeof(Libraries[0])] = {};
+		static std::once_flag LoadFlag;
+		std::call_once(LoadFlag, [&]()
+		{
+			for(size_t Index = 0; Index < sizeof(Libraries) / sizeof(Libraries[0]); ++Index)
+			{
+				if(!LoadedLibraries[Index])
+				{
+					LoadedLibraries[Index] = LoadLibraryA(Libraries[Index]);
+					if(!LoadedLibraries[Index])
+					{
+						const DWORD ErrorCode = GetLastError();
+						std::ostringstream Message;
+						Message << "unable to load FFmpeg library " << Libraries[Index]
+							<< " or one of its dependencies; ensure the bundled FFmpeg DLLs "
+							<< "are present beside the executable (Windows error "
+							<< ErrorCode << ")";
+						throw std::runtime_error(Message.str());
+					}
+				}
+			}
+		});
+	}
+
 	struct SFFmpegResources
 	{
 		AVFormatContext* Input = NULL;
@@ -456,6 +490,8 @@ void ConvertAudioToSc1ReplacementWave(const std::wstring& InputPath,
 	{
 		throw std::runtime_error("replacement WAV would exceed the RIFF size limit");
 	}
+
+	LoadFFmpegLibraries();
 
 	SFFmpegResources Resources;
 	const std::string InputPathUtf8 = WidePathToUtf8(InputPath);
