@@ -8,11 +8,41 @@
 #include "AudioExceptions.h"
 #include "6BitAdpcm.h"
 
+namespace
+{
+	bool Read4BitSubframe(CDataStream& Input, unsigned long CodeCount,
+		unsigned long* Expanded)
+	{
+		if(CodeCount == 0)
+		{
+			return true;
+		}
+
+		const unsigned long PackedSize = CodeCount * 4 / 8 + 1;
+		unsigned long BytesRead = PackedSize;
+		void* PackedData = Input.Read(BytesRead);
+		if(BytesRead != PackedSize)
+		{
+			return false;
+		}
+
+		const unsigned long WordCount = (CodeCount + 7) / 8;
+		std::vector<unsigned char> PaddedData(WordCount * 4, 0);
+		const unsigned long CopySize = BytesRead < PaddedData.size()
+			? BytesRead : static_cast<unsigned long>(PaddedData.size());
+		memcpy(&PaddedData[0], PackedData, CopySize);
+		Expand4BitAdpcmBlock(&PaddedData[0], Expanded, CodeCount);
+		return true;
+	}
+}
+
 COld6Or4BitStream::COld6Or4BitStream(CDataStream* Input) :
 	CStreamHelper(Input),
 	m_SampleRate(36000),
 	m_Channels(2),
 	m_ByteBlockSize(0),
+	m_SamplesLeft(0),
+	m_SubframesLeft(0),
 	m_ExpandedBuffer(NULL)
 {
 	return;
@@ -37,6 +67,7 @@ bool COld6Or4BitStream::InitializeHeader(unsigned long SampleRate)
 	m_OutputBufferUsed=0;
 	m_ByteBlockSize=0;
 	m_SamplesLeft=0;
+	m_SubframesLeft=0;
 	delete[] m_ExpandedBuffer;
 	m_ExpandedBuffer=NULL;
 
@@ -81,6 +112,7 @@ bool COld6Or4BitStream::InitializeHeader(unsigned long SampleRate)
 
 	// Allocate an expanded buffer
 	m_SamplesLeft = m_Header.SampleCount;
+	m_SubframesLeft = m_Header.Unknown1;
 	m_ByteBlockSize = m_Header.BitsPerSample * m_Header.BlockSize / 4;
 	if(m_Header.BitsPerSample==6)
 	{
@@ -197,65 +229,62 @@ bool COld6Or4BitStream::DoDecodeBlock()
 
 		if(m_Channels==1)
 		{
-			/*
-			// Read the headers
-			S4BitAdpcmBlockHeader Header;
-			if(m_InputStream->Read(&Header, sizeof(Header))<sizeof(Header))
+			if(m_SubframesLeft == 0)
 			{
 				m_OutputBufferUsed=0;
 				return true;
 			}
-			if(Header.Signature!=2)
+
+			unsigned long FirstSampleCount;
+			unsigned long SecondSampleCount;
+			if(m_SubframesLeft == 1)
 			{
-				m_OutputBufferUsed=0;
-				return true;
+				FirstSampleCount=m_Header.Unknown2;
+				SecondSampleCount=0;
 			}
-			*/
-			if(m_PersistHeader.Signature!=2)
+			else if(m_SubframesLeft == 2)
 			{
-				if(m_InputStream->Read(&m_PersistHeader, sizeof(m_PersistHeader))<sizeof(m_PersistHeader))
-				{
-					m_OutputBufferUsed=0;
-					return true;
-				}
-				if(m_PersistHeader.Signature!=2)
-				{
-					m_OutputBufferUsed=0;
-					return true;
-				}
+				FirstSampleCount=m_Header.BlockSize;
+				SecondSampleCount=m_Header.Unknown2;
 			}
 			else
 			{
-				S4BitAdpcmBlockHeader Header;
-				if(m_InputStream->Read(&Header, sizeof(Header))<sizeof(Header))
-				{
-					m_OutputBufferUsed=0;
-					return true;
-				}
-				if(Header.Signature!=2)
-				{
-					m_OutputBufferUsed=0;
-					return true;
-				}
+				FirstSampleCount=m_Header.BlockSize;
+				SecondSampleCount=m_Header.BlockSize;
+			}
+			if(FirstSampleCount>m_Header.BlockSize || SecondSampleCount>m_Header.BlockSize)
+			{
+				throw(XFileException("Invalid 4-bit ADPCM subframe size"));
+			}
+			SampleCount=FirstSampleCount+SecondSampleCount;
+
+			if(m_InputStream->Read(&m_PersistHeader, sizeof(m_PersistHeader))<sizeof(m_PersistHeader))
+			{
+				m_OutputBufferUsed=0;
+				return true;
+			}
+			if(m_PersistHeader.Signature!=2)
+			{
+				m_OutputBufferUsed=0;
+				return true;
 			}
 
-			// Decode the first half of the block
-			unsigned long Length;
-			void* Buffer;
-			Length=m_ByteBlockSize/2;
-			Buffer=m_InputStream->Read(Length);
-			m_InputStream->Ignore(1);
-			Expand4BitAdpcmBlock(Buffer, m_ExpandedBuffer, SampleCount/2);
+			if(!Read4BitSubframe(*m_InputStream, FirstSampleCount, m_ExpandedBuffer))
+			{
+				m_OutputBufferUsed=0;
+				return true;
+			}
 			DecompressMono4BitAdpcmBlock(m_PersistHeader, m_ExpandedBuffer, \
-				m_OutputBuffer, SampleCount/2);
+				m_OutputBuffer, FirstSampleCount);
 
-			// Decode the second half of the block
-			Length=m_ByteBlockSize/2;
-			Buffer=m_InputStream->Read(Length);
-			m_InputStream->Ignore(1);
-			Expand4BitAdpcmBlock(Buffer, m_ExpandedBuffer, SampleCount/2);
+			if(!Read4BitSubframe(*m_InputStream, SecondSampleCount, m_ExpandedBuffer))
+			{
+				m_OutputBufferUsed=0;
+				return true;
+			}
 			DecompressMono4BitAdpcmBlock(m_PersistHeader, m_ExpandedBuffer, \
-				m_OutputBuffer+(SampleCount/2), SampleCount/2);
+				m_OutputBuffer+FirstSampleCount, SecondSampleCount);
+			m_SubframesLeft -= m_SubframesLeft > 1 ? 2 : 1;
 		}
 		else if(m_Channels==2)
 		{
@@ -331,4 +360,3 @@ unsigned char COld6Or4BitStream::GetBitsPerSample() const
 {
 	return (unsigned char)m_Header.BitsPerSample;
 }
-

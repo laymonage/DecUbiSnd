@@ -107,6 +107,9 @@
     <ClInclude Include="Decoding\6BitAdpcm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Decoding\Ubi4BitAdpcm.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Decoding\ADPCM.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "Decoding/Ubi4BitAdpcm.h"
 #include "Sc1AdpcmEncoder.h"
 
 namespace
@@ -17,52 +18,7 @@ namespace
 	const size_t CHANNEL_HEADER_SIZE = 52;
 	const unsigned long EXPECTED_SAMPLE_RATE = 36000;
 
-	const int ADPCM4_TABLE1[8] =
-	{
-		-100000000, 8, 269, 425, 545, 645, 745, 850
-	};
-	const int ADPCM4_TABLE2[8] =
-	{
-		-1536, 2314, 5243, 8192, 14336, 25354, 45445, 143626
-	};
-	const int DELTA_TABLE[66] =
-	{
-		1024, 1031, 1053, 1076, 1099, 1123, 1148, 1172,
-		1198, 1224, 1251, 1278, 1306, 1334, 1363, 1393,
-		1423, 1454, 1485, 1518, 1551, 1584, 1619, 1654,
-		1690, 1726, 1764, 1802, 1841, 1881, 1922, 1964,
-		2007, -1024, -1031, -1053, -1076, -1099, -1123, -1148,
-		-1172, -1198, -1224, -1251, -1278, -1306, -1334, -1363,
-		-1393, -1423, -1454, -1485, -1518, -1551, -1584, -1619,
-		-1654, -1690, -1726, -1764, -1802, -1841, -1881, -1922,
-		-1964, -2007
-	};
-
-	struct SChannelState
-	{
-		int Signature;
-		int Step1;
-		int Next1;
-		int Next2;
-		short Coef1;
-		short Coef2;
-		short Unused1;
-		short Unused2;
-		short Mod1;
-		short Mod2;
-		short Mod3;
-		short Mod4;
-		short Hist1;
-		short Hist2;
-		short Unused3;
-		short Unused4;
-		short Delta1;
-		short Delta2;
-		short Delta3;
-		short Delta4;
-		short Delta5;
-		short Unused5;
-	};
+	typedef Ubi4BitAdpcm::State SChannelState;
 
 	struct SSubframe
 	{
@@ -135,38 +91,6 @@ namespace
 		const unsigned long Bits = static_cast<unsigned long>(Value);
 		return Bits < 0x80000000UL ? static_cast<int>(Bits)
 			: static_cast<int>(static_cast<long long>(Bits) - 0x100000000LL);
-	}
-
-	short WrapI16(long long Value)
-	{
-		const unsigned short Bits = static_cast<unsigned short>(Value);
-		return Bits < 0x8000 ? static_cast<short>(Bits)
-			: static_cast<short>(static_cast<int>(Bits) - 0x10000);
-	}
-
-	int ArithmeticShiftRight(int Value, unsigned int Shift)
-	{
-		if(Value >= 0)
-		{
-			return Value >> Shift;
-		}
-		return -1 - static_cast<int>((-1LL - Value) >> Shift);
-	}
-
-	short Clamp16(long long Value)
-	{
-		return static_cast<short>((std::max)(-32768LL, (std::min)(32767LL, Value)));
-	}
-
-	short AbsMax16(short Value, short Maximum)
-	{
-		return static_cast<short>((std::max)(-static_cast<int>(Maximum),
-			(std::min)(static_cast<int>(Maximum), static_cast<int>(Value))));
-	}
-
-	int Sign(int Value)
-	{
-		return Value < 0 ? -1 : 1;
 	}
 
 	unsigned long long CheckedAdd(unsigned long long Left, unsigned long long Right)
@@ -396,80 +320,11 @@ namespace
 
 	short ExpandCode4Bit(unsigned char Code, SChannelState& State)
 	{
-		const int CodeSigned = static_cast<int>(Code) - 7;
-		const unsigned int StepIndex = static_cast<unsigned int>(CodeSigned < 0 ? -CodeSigned : CodeSigned);
-		if(StepIndex > 7)
+		if(Code > 14)
 		{
 			throw std::runtime_error("4-bit code is outside the supported range 0..14");
 		}
-		const int StepNext = WrapI32(static_cast<long long>(ADPCM4_TABLE1[StepIndex]) + State.Step1);
-		int Step = ArithmeticShiftRight(WrapI32(
-			static_cast<long long>(static_cast<unsigned int>(State.Step1) & 0xffff) * 246
-				+ ADPCM4_TABLE2[StepIndex]), 8);
-		Step = (std::max)(271, (std::min)(2560, Step));
-
-		int Delta = 0;
-		const unsigned long StepBits = static_cast<unsigned long>(StepNext);
-		if((((StepBits & 0xffffff00UL) - 1) & 0x80000000UL) == 0)
-		{
-			const unsigned int DeltaIndex = static_cast<unsigned int>(
-				(ArithmeticShiftRight(StepNext, 3) & 0x1f) + (CodeSigned < 0 ? 33 : 0));
-			const unsigned int DeltaShift = static_cast<unsigned int>(
-				(std::max)(0, (std::min)(31, static_cast<int>(
-					(static_cast<unsigned long>(ArithmeticShiftRight(StepNext, 8)) & 0xff)))));
-			const long long Multiplier = static_cast<long long>(1) << DeltaShift;
-			Delta = ArithmeticShiftRight(WrapI32(
-				static_cast<long long>(DELTA_TABLE[DeltaIndex]) * Multiplier), 10);
-		}
-
-		const short NextValue = WrapI16(ArithmeticShiftRight(WrapI32(
-			static_cast<long long>(State.Mod1) * State.Delta1
-			+ static_cast<long long>(State.Mod2) * State.Delta2
-			+ static_cast<long long>(State.Mod3) * State.Delta3
-			+ static_cast<long long>(State.Mod4) * State.Delta4), 10));
-		const int Prediction = ArithmeticShiftRight(WrapI32(
-			static_cast<long long>(State.Coef1) * State.Hist1
-			+ static_cast<long long>(State.Coef2) * State.Hist2), 10);
-		const short Sample = WrapI16(WrapI32(static_cast<long long>(Delta) + NextValue + Prediction));
-
-		long long Coef1Next = static_cast<long long>(State.Coef1) * 255;
-		long long Coef2Next = static_cast<long long>(State.Coef2) * 254;
-		Delta = WrapI16(Delta);
-		if(Delta + NextValue)
-		{
-			const int Sign1 = Sign(Delta + NextValue) * Sign(State.Delta1 + State.Next1);
-			const int Sign2 = Sign(Delta + NextValue) * Sign(State.Delta2 + State.Next2);
-			short CoefDelta = WrapI16(ArithmeticShiftRight(Sign1 * 3072 + static_cast<int>(Coef1Next), 6) & ~0x3);
-			CoefDelta = Clamp16(static_cast<int>(Clamp16(static_cast<int>(CoefDelta) + 30719)) - 30719);
-			CoefDelta = Clamp16(static_cast<int>(Clamp16(static_cast<int>(CoefDelta) - 30720)) + 30720);
-			const int CoefDeltaWide =
-				(static_cast<int>(WrapI16(Sign2 * 1024)) - WrapI16(Sign1 * CoefDelta)) * 2;
-			Coef1Next += Sign1 * 3072;
-			Coef2Next += CoefDeltaWide;
-		}
-
-		State.Hist2 = State.Hist1;
-		State.Hist1 = Sample;
-		State.Coef2 = AbsMax16(WrapI16(ArithmeticShiftRight(WrapI32(Coef2Next), 8)), 768);
-		State.Coef1 = AbsMax16(WrapI16(ArithmeticShiftRight(WrapI32(Coef1Next), 8)),
-			static_cast<short>(960 - State.Coef2));
-		State.Next2 = State.Next1;
-		State.Next1 = NextValue;
-		State.Step1 = Step;
-		State.Delta5 = State.Delta4;
-		State.Delta4 = State.Delta3;
-		State.Delta3 = State.Delta2;
-		State.Delta2 = State.Delta1;
-		State.Delta1 = static_cast<short>(Delta);
-		State.Mod4 = ArithmeticShiftRight(Clamp16(
-			static_cast<long long>(State.Mod4) * 255 + 2048 * Sign(State.Delta1) * Sign(State.Delta5)), 8);
-		State.Mod3 = ArithmeticShiftRight(Clamp16(
-			static_cast<long long>(State.Mod3) * 255 + 2048 * Sign(State.Delta1) * Sign(State.Delta4)), 8);
-		State.Mod2 = ArithmeticShiftRight(Clamp16(
-			static_cast<long long>(State.Mod2) * 255 + 2048 * Sign(State.Delta1) * Sign(State.Delta3)), 8);
-		State.Mod1 = ArithmeticShiftRight(Clamp16(
-			static_cast<long long>(State.Mod1) * 255 + 2048 * Sign(State.Delta1) * Sign(State.Delta2)), 8);
-		return Sample;
+		return Ubi4BitAdpcm::DecodeCode(Code, State);
 	}
 
 	std::vector<unsigned char> PackCodes(const std::vector<unsigned char>& Codes)

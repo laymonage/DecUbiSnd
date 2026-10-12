@@ -1496,6 +1496,11 @@ smallloop_start:
 
 static long DoMono4BitSample(long Input, S4BitAdpcmBlockHeader& Header)
 {
+	if(Input >= 0 && Input <= 15)
+	{
+		return Ubi4BitAdpcm::DecodeCode(static_cast<unsigned char>(Input), Header);
+	}
+
 	//S4BitAdpcmBlockHeader* Local30=&Left;
 	//S4BitAdpcmBlockHeader* Local28=&Right;
 	//long* Local1C=(long*)Expanded;
@@ -1807,8 +1812,6 @@ void DecompressMono4BitAdpcmBlock(S4BitAdpcmBlockHeader& Header, \
 	S4BitAdpcmBlockHeader* Local30=&Header;
 	long* Local1C=(long*)Expanded;
 	unsigned long Local10=SampleCount;
-	long Local18;
-	long Local0C;
 
 	__asm
 	{

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "Ubi4BitAdpcm.h"
 
 struct S6BitAdpcmBlockHeader
 {
@@ -21,22 +22,7 @@ struct S6BitAdpcmBlockHeader
 	uint32_t Unknown12;
 };
 
-struct S4BitAdpcmBlockHeader
-{
-	uint32_t Signature;
-	uint32_t Unknown1;
-	uint32_t Unknown2;
-	uint32_t Unknown3;
-	uint32_t Unknown4;
-	uint32_t Unknown5;
-	uint32_t Unknown6;
-	uint32_t Unknown7;
-	uint32_t Unknown8;
-	uint32_t Unknown9;
-	uint32_t Unknown10;
-	uint32_t Unknown11;
-	uint32_t Unknown12;
-};
+typedef Ubi4BitAdpcm::State S4BitAdpcmBlockHeader;
 
 // Get the number of samples in a specified number of bytes 6-bit
 unsigned long Get6BitAdpcmSamples(unsigned long Bytes);

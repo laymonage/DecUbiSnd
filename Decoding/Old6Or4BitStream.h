@@ -35,6 +35,7 @@ protected:
 	unsigned char m_Channels;
 	unsigned long m_ByteBlockSize;
 	unsigned long m_SamplesLeft;
+	unsigned long m_SubframesLeft;
 	unsigned long* m_ExpandedBuffer;
 
 	S4BitAdpcmBlockHeader m_PersistHeader;

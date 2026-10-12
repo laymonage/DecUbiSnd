@@ -126,6 +126,7 @@
     <ClInclude Include="Encoding\AudioConverter.h" />
     <ClInclude Include="Encoding\Sc1AdpcmEncoder.h" />
     <ClInclude Include="Decoding\6BitAdpcm.h" />
+    <ClInclude Include="Decoding\Ubi4BitAdpcm.h" />
     <ClInclude Include="Decoding\ADPCM.h" />
     <ClInclude Include="Decoding\AudioExceptions.h" />
     <ClInclude Include="Decoding\AudioStream.h" />
